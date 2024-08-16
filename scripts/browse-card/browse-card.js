@@ -112,7 +112,7 @@ const formatDateString = (dateString) => {
   const formattedTimeWithoutZone = `${time} ${period}`;
   // Return date and time without timezone
   return `${formattedDate} | ${formattedTimeWithoutZone}`;
-}
+};
 
 const buildTagsContent = (cardMeta, tags = []) => {
   tags.forEach((tag) => {
