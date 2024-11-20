@@ -2,10 +2,9 @@ import { decorateIcons, getMetadata } from '../../scripts/lib-franklin.js';
 import {
   createTag,
   htmlToElement,
-  debounce,
   getPathDetails,
   fetchLanguagePlaceholders,
-  isArticleLandingPage,
+  matchesAnyTheme,
 } from '../../scripts/scripts.js';
 import {
   roleOptions,
@@ -36,6 +35,19 @@ import { COVEO_SEARCH_CUSTOM_EVENTS } from '../../scripts/search/search-utils.js
 
 const ffetchModulePromise = import('../../scripts/ffetch.js');
 
+/**
+ * debounce fn execution
+ */
+const debounce = (ms, fn) => {
+  let timer;
+  // eslint-disable-next-line func-names
+  return function (...args) {
+    clearTimeout(timer);
+    args.unshift(this);
+    timer = setTimeout(fn(args), ms);
+  };
+};
+
 const coveoFacetMap = {
   el_role: 'headlessRoleFacet',
   el_contenttype: 'headlessTypeFacet',
@@ -52,6 +64,10 @@ try {
 } catch (err) {
   // eslint-disable-next-line no-console
   console.error('Error fetching placeholders:', err);
+}
+
+function isArticleLandingPage() {
+  return matchesAnyTheme(/^article-.*/);
 }
 
 // Helper function thats returns a list of all Featured Card Products //
@@ -300,14 +316,14 @@ async function appendTag(block, tag, source = 'checkboxChange') {
       <span class="icon icon-close"></span>
     </button>
   `);
+  if (source === 'checkboxChange') {
+    decorateIcons(tagEl);
+  }
   tagsContainer.append(tagEl);
   tagsProxy.push({
     name: tag.name,
     value: tag.value,
   });
-  if (source === 'checkboxChange') {
-    await decorateIcons(tagsContainer);
-  }
 }
 
 function removeFromTags(block, value) {
@@ -954,17 +970,13 @@ function handleCoveoHeadlessSearch(
   window.addEventListener('hashchange', handleUriHash);
   if (window.headlessResultsPerPage) {
     window.addEventListener('resize', () => {
-      debounce(
-        'win-resize-browse-filters',
-        () => {
-          const newResultsPerPage = getBrowseFiltersResultCount();
-          if (window.headlessResultsPerPage.state.numberOfResults !== newResultsPerPage) {
-            buildCardsShimmer.updateCount(newResultsPerPage);
-            window.headlessResultsPerPage.set(newResultsPerPage);
-          }
-        },
-        50,
-      );
+      debounce(50, () => {
+        const newResultsPerPage = getBrowseFiltersResultCount();
+        if (window.headlessResultsPerPage.state.numberOfResults !== newResultsPerPage) {
+          buildCardsShimmer.updateCount(newResultsPerPage);
+          window.headlessResultsPerPage.set(newResultsPerPage);
+        }
+      });
     });
   }
   const filtersPaginationEl = browseFiltersSection.querySelector('.browse-filters-pagination');

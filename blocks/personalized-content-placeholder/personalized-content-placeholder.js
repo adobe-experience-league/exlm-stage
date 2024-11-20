@@ -1,10 +1,14 @@
-import { htmlToElement, moveInstrumentation, decorateExternalLinks } from '../../scripts/scripts.js';
+import { htmlToElement, decorateExternalLinks } from '../../scripts/scripts.js';
 import { defaultProfileClient } from '../../scripts/auth/profile.js';
-import { loadBlocks, decorateSections, decorateBlocks, decorateIcons } from '../../scripts/lib-franklin.js';
-import { globalEmitter } from '../../scripts/events.js';
+import { loadBlocks, decorateSections, decorateBlocks } from '../../scripts/lib-franklin.js';
+import getEmitter from '../../scripts/events.js';
+import { moveInstrumentation } from '../../scripts/utils/ue-utils.js';
+
+const signupDialogEventEmitter = getEmitter('signupDialog');
+const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 
 // Will be refactoring this function to use a loadFragment() function from scripts.js
-const fetchPageContent = async (url, loader, block) => {
+const fetchPageContent = async (url, content, block) => {
   try {
     const response = await fetch(`${url}.plain.html`);
     if (response.ok) {
@@ -15,14 +19,14 @@ const fetchPageContent = async (url, loader, block) => {
       decorateBlocks(container);
       decorateExternalLinks(container);
       await loadBlocks(container);
-      await decorateIcons(container);
       if (window.hlx.aemRoot) {
-        loader.insertAdjacentElement('beforebegin', container);
+        content.innerHTML = '';
+        content.append(container);
         moveInstrumentation(block, container);
       } else {
         Array.from(container.children).forEach((section) => {
           section.classList.add('profile-custom-container');
-          loader.insertAdjacentElement('beforebegin', section);
+          content.insertAdjacentElement('beforebegin', section);
         });
       }
     }
@@ -55,23 +59,31 @@ const decoratePersonalizedContent = async (block) => {
       await fetchPageContent(incompletePageURL, currentSection, block);
     }
     loader.remove();
-    currentSection.style.display = 'none';
   }
 };
 
 export default async function decorate(block) {
   const blockInnerHTML = block.innerHTML;
-  decoratePersonalizedContent(block);
+  await decoratePersonalizedContent(block);
+  const currentSection = block.parentElement.parentElement;
+  if (!UEAuthorMode) {
+    currentSection.classList.add('personalized-content-hidden');
+  }
 
-  globalEmitter.on('signupDialogClose', async () => {
+  signupDialogEventEmitter.on('signupDialogClose', async () => {
     block.innerHTML = blockInnerHTML;
-
+    if (!UEAuthorMode) {
+      currentSection.classList.remove('personalized-content-hidden');
+    }
     const profileSections = document.querySelectorAll('.profile-custom-container');
     if (profileSections.length > 0) {
       profileSections.forEach((section) => {
         section.remove();
       });
     }
-    decoratePersonalizedContent(block);
+    await decoratePersonalizedContent(block);
+    if (!UEAuthorMode) {
+      currentSection.classList.add('personalized-content-hidden');
+    }
   });
 }

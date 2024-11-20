@@ -21,13 +21,12 @@
   padding: 10px;
 }
 
-
 .feedback-ui.no-git {
   display: block;
 }
 
 .feedback-ui.no-git .right {
-  display: none!important;
+  display: none !important;
 }
 
 .feedback-ui.no-git .like-btns {
@@ -35,7 +34,7 @@
 }
 
 .feedback-ui.no-git .first-question > span.icon {
-  display: none!important;
+  display: none !important;
 }
 
 .feedback-ui .first-question {
@@ -62,25 +61,25 @@
 }
 
 .feedback-ui .left .icon,
-.feedback-ui .is-desktop.icon-chevron {
+.feedback-ui .is-desktop.icon-chevron-gray {
   width: 17px;
   height: 17px;
   cursor: pointer;
 }
 
-.feedback-ui .left .icon-chevron,
-.feedback-ui .right .icon-chevron {
+.feedback-ui .left .icon-chevron-gray,
+.feedback-ui .right .icon-chevron-gray {
   margin-right: 10px;
   padding: 5px 6px 1px;
   vertical-align: bottom;
 }
 
-.feedback-ui .left .icon-chevron {
+.feedback-ui .left .icon-chevron-gray {
   position: absolute;
   right: -3px;
 }
 
-.feedback-ui .right .icon-chevron {
+.feedback-ui .right .icon-chevron-gray {
   display: none;
   transform: translateY(-1px);
 }
@@ -249,11 +248,11 @@
   padding-bottom: 0;
 }
 
-.feedback-ui[aria-expanded='true'] .left .icon-chevron {
+.feedback-ui[aria-expanded='true'] .left .icon-chevron-gray {
   transform: translateY(-3px) rotate(180deg);
 }
 
-.feedback-ui[aria-expanded='true'] .right .icon-chevron {
+.feedback-ui[aria-expanded='true'] .right .icon-chevron-gray {
   transform: translateY(1px) rotate(180deg);
 }
 
@@ -279,7 +278,7 @@
 }
 
 .feedback-ui .tooltip::after {
-  content: "";
+  content: '';
   position: absolute;
   block-size: 8px;
   inline-size: 8px;
@@ -291,7 +290,7 @@
 }
 
 .feedback-ui .like-btns button:hover .tooltip,
-.feedback-ui .git-buttons button:hover .tooltip, 
+.feedback-ui .git-buttons button:hover .tooltip,
 .feedback-ui .cta button:disabled:hover .tooltip {
   visibility: visible;
   opacity: 1;
@@ -346,7 +345,7 @@
     margin-right: 2px;
   }
 
-  .feedback-ui .left .icon-chevron {
+  .feedback-ui .left .icon-chevron-gray {
     transform: translateY(-1px);
   }
 
@@ -384,17 +383,17 @@
     font-size: 17.5px;
   }
 
-  .feedback-ui .left .icon-chevron {
+  .feedback-ui .left .icon-chevron-gray {
     display: none;
   }
 
-  .feedback-ui .right .icon-chevron {
+  .feedback-ui .right .icon-chevron-gray {
     display: inline-block;
     position: absolute;
     right: 4px;
   }
 
-  .feedback-ui .right[aria-hidden='false'] .icon-chevron {
+  .feedback-ui .right[aria-hidden='false'] .icon-chevron-gray {
     right: -3px;
   }
 }
@@ -408,7 +407,7 @@
 
 @media (width >= 1407px) {
   .feedback-ui {
-    max-width:1344px
+    max-width: 1344px;
   }
 
   .feedback-ui.no-git {

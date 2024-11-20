@@ -6,7 +6,10 @@ import { defaultProfileClient } from '../auth/profile.js';
 import SignUpFlowShimmer from './signup-flow-shimmer.js';
 import FormValidator from '../form-validator.js';
 import { sendNotice } from '../toast/toast.js';
-import { globalEmitter } from '../events.js';
+import getEmitter from '../events.js';
+import { pushSignupEvent } from '../analytics/lib-analytics.js';
+
+const signupDialogEventEmitter = getEmitter('signupDialog');
 
 /**
  * Types of signup dialog modals.
@@ -22,6 +25,18 @@ const SIGNUP_DIALOG_TYPE = {
  * @type {string}
  */
 const SIGNUP_INTERACTION_NAME = 'modalSeen';
+
+/**
+ * Decorates the signup dialog content with sections, blocks, and icons.
+ * @param {Element} signupContent - The container element for the signup content.
+ * @returns {Promise<void>}
+ */
+async function decorateDialog(signupContent) {
+  decorateSections(signupContent);
+  decorateIcons(signupContent);
+  decorateBlocks(signupContent);
+  await loadBlocks(signupContent);
+}
 
 /**
  * Class representing the Signup Flow Dialog.
@@ -95,7 +110,7 @@ export default class SignupFlowDialog {
   }
 
   /**
-   * Sets up events to handle closing the signup dialog.
+   * Sets up events to handle closing of the signup dialog.
    */
   setupCloseEvents() {
     const signupClose = this.signupDialog.querySelectorAll('.close-action');
@@ -105,13 +120,14 @@ export default class SignupFlowDialog {
         e.preventDefault();
         this.signupDialog.close();
         document.body.classList.remove('overflow-hidden');
-        globalEmitter.emit('signupDialogClose', { status: 'closed' });
+        signupDialogEventEmitter.emit('signupDialogClose', { status: 'closed' });
+        pushSignupEvent(e.target, 'complete');
       });
     });
 
     this.signupDialog.addEventListener('cancel', () => {
       document.body.classList.remove('overflow-hidden');
-      globalEmitter.emit('signupDialogClose', { status: 'closed' });
+      signupDialogEventEmitter.emit('signupDialogClose', { status: 'closed' });
     });
   }
 
@@ -142,7 +158,7 @@ export default class SignupFlowDialog {
           <a class="signup-dialog-close-btn close-action">
               <span class="close-text">${this.placeholders?.closeBtnLabel || 'Close'}</span>
               <div class="close-icon-holder">
-                  <span class="icon icon-close"></span>
+                  <span class="icon icon-close-light"></span>
               </div>
           </a>
         </div>
@@ -223,14 +239,18 @@ export default class SignupFlowDialog {
     // Generate step flow content based on the current step index
     let flow = '';
     if (pageIndex < this.pages.length - 1) {
-      dialogTitle.innerHTML = `<h4>${data.title}</h4><p>Step ${pageIndex + 1} of ${this.pages.length - 1}</p>`;
+      dialogTitle.innerHTML = `<h4>${data.title}</h4><p>${
+        this.placeholders?.signupStepProgress
+          ? this.placeholders.signupStepProgress.replace('{}', pageIndex + 1).replace('{}', this.pages.length - 1)
+          : `Step ${pageIndex + 1} of ${this.pages.length - 1}`
+      }</p>`;
       flow = `<div class="signup-dialog-step-flow">
                 ${this.pages
                   .map((step, index) => {
                     if (!step.nofollow) {
                       let result;
                       if (pageIndex > index) {
-                        result = `<div class="check-icon-shell"><span class="icon icon-checkmark"></span></div>`;
+                        result = `<div class="check-icon-shell"><span class="icon icon-checkmark-light"></span></div>`;
                       } else if (pageIndex === index) {
                         result = `<div class="signup-dialog-step current-step">${index + 1}</div>`;
                       } else {
@@ -251,7 +271,7 @@ export default class SignupFlowDialog {
 
     // Set the inner HTML of the step container to the generated flow
     stepsContainer.innerHTML = flow;
-    await decorateIcons(stepsContainer);
+    decorateIcons(stepsContainer);
   }
 
   /**
@@ -296,18 +316,6 @@ export default class SignupFlowDialog {
   }
 
   /**
-   * Decorates the signup dialog content with sections, blocks, and icons.
-   * @param {Element} signupContent - The container element for the signup content.
-   * @returns {Promise<void>}
-   */
-  async decorateDialog(signupContent) {
-    decorateSections(signupContent);
-    decorateBlocks(signupContent);
-    await loadBlocks(signupContent);
-    await decorateIcons(this.signupDialog);
-  }
-
-  /**
    * Loads the content of the signup dialog for a specific page.
    * @param {number} index - The index of the page to load.
    * @returns {Promise<boolean>} - Returns true if the content was successfully loaded, false otherwise.
@@ -325,7 +333,7 @@ export default class SignupFlowDialog {
         signupContent.setAttribute('data-current-page-index', index);
         signupContainer.className = `signup-dialog-container ${this.pages[index].name}-container`;
         signupContent.innerHTML = pageContent;
-        await this.decorateDialog(signupContent);
+        await decorateDialog(signupContent);
         return true;
       }
       return false;
@@ -388,8 +396,16 @@ export default class SignupFlowDialog {
       const prevBtn = this.signupDialog.querySelector('.signup-dialog-nav-bar .prev-btn');
       const nextBtn = this.signupDialog.querySelector('.signup-dialog-nav-bar .next-btn');
 
-      prevBtn.addEventListener('click', () => this.handleNavigation(-1));
-      nextBtn.addEventListener('click', () => this.handleNavigation(1));
+      prevBtn.addEventListener('click', (e) => {
+        this.handleNavigation(-1);
+        pushSignupEvent(e.target, 'back');
+      });
+      nextBtn.addEventListener('click', (e) => {
+        this.handleNavigation(1);
+        pushSignupEvent(e.target, 'view');
+      });
+      // datalayer push for signup modal show event
+      pushSignupEvent(nextBtn, 'show-modal');
     }
   }
 

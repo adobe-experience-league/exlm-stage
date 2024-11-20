@@ -4,11 +4,11 @@ import {
   getPathDetails,
   createPlaceholderSpan,
   fetchLanguagePlaceholders,
-  fetchAuthorBio,
 } from '../../scripts/scripts.js';
 import { createOptimizedPicture, decorateIcons, getMetadata } from '../../scripts/lib-franklin.js';
 import ffetch from '../../scripts/ffetch.js';
 import UserActions from '../../scripts/user-actions/user-actions.js';
+import { fetchAuthorBio } from '../../scripts/utils/author-utils.js';
 
 const metadataProperties = {
   adobe: 'adobe',
@@ -46,6 +46,7 @@ try {
 }
 
 async function createOptions(container, readTimeText) {
+  const { lang } = getPathDetails();
   const options = document.createElement('div');
   options.classList.add('article-marquee-options');
   const cardAction = UserActions({
@@ -57,18 +58,23 @@ async function createOptions(container, readTimeText) {
   cardAction.decorate();
 
   const lastUpdated = document.createElement('div');
+  lastUpdated.classList.add('article-marquee-last-updated');
   const lastUpdatedData = document.querySelector('meta[name="published-time"]').getAttribute('content');
   const date = new Date(lastUpdatedData);
-  lastUpdated.classList.add('article-marquee-last-updated');
-  lastUpdated.textContent = `${placeholders.articleMarqueeLastUpdatedText} ${date.toLocaleDateString(undefined, {
+  const formatOptions = {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  })}`;
+  };
+  lastUpdated.textContent = `${placeholders.articleMarqueeLastUpdatedText} ${date.toLocaleDateString(
+    lang,
+    formatOptions,
+  )}`;
 
   const readTime = document.createElement('div');
   readTime.classList.add('article-marquee-read-time');
   readTime.innerHTML = `<span class="icon icon-time"></span> <span>${readTimeText} ${placeholders.articleMarqueeReadTimeText}</span>`;
+  decorateIcons(readTime);
 
   container.appendChild(options);
   container.appendChild(lastUpdated);
@@ -161,7 +167,6 @@ export default async function ArticleMarquee(block) {
 
     const breadcrumbContainer = block.querySelector('.breadcrumb');
     createBreadcrumb(breadcrumbContainer);
-    decorateIcons(block);
 
     if (Array.isArray(links) && links.length > 0) {
       // Filter out null, empty and duplicate links and map to fetchAuthorBio

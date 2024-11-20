@@ -5,8 +5,10 @@ import { defaultProfileClient, isSignedInUser } from '../../scripts/auth/profile
 import Dropdown from '../../scripts/dropdown/dropdown.js';
 import { fetchIndustryOptions } from '../../scripts/profile/profile.js';
 import FormValidator from '../../scripts/form-validator.js';
-import { globalEmitter } from '../../scripts/events.js';
+import getEmitter from '../../scripts/events.js';
 
+const profileEventEmitter = getEmitter('profile');
+const signupDialogEventEmitter = getEmitter('signupDialog');
 let placeholders = {};
 try {
   placeholders = await fetchLanguagePlaceholders();
@@ -16,7 +18,8 @@ try {
 }
 
 const PROFILE_UPDATED = placeholders?.profileUpdated || 'Your profile changes have been saved!';
-const PROFILE_NOT_UPDATED = placeholders?.profileNotUpdated || 'Your profile changes have not been saved!';
+const PROFILE_NOT_UPDATED =
+  placeholders?.profileNotUpdated || 'An error occurred during profile update. Please try again at a later time.';
 const SELECT_ROLE = placeholders?.selectRole || 'Select this role';
 const FORM_ERROR = placeholders?.formFieldGroupError || 'Please select at least one option.';
 
@@ -111,6 +114,7 @@ async function decorateContent(block) {
 `);
 
   block.textContent = '';
+  decorateIcons(roleAndIndustryDiv);
   block.append(roleAndIndustryDiv);
 
   if (isSignedIn) {
@@ -132,9 +136,9 @@ async function decorateContent(block) {
         .updateProfile('industryInterests', industrySelection, true)
         .then(() => {
           sendNotice(PROFILE_UPDATED);
-          globalEmitter.emit('profileDataUpdated');
+          profileEventEmitter.emit('profileDataUpdated');
         })
-        .catch(() => sendNotice(PROFILE_NOT_UPDATED));
+        .catch(() => sendNotice(PROFILE_NOT_UPDATED, 'error'));
     });
 
     const profileData = await defaultProfileClient.getMergedProfile();
@@ -173,9 +177,9 @@ async function decorateContent(block) {
         .updateProfile('role', selectedRoles, true)
         .then(() => {
           sendNotice(PROFILE_UPDATED);
-          globalEmitter.emit('profileDataUpdated');
+          profileEventEmitter.emit('profileDataUpdated');
         })
-        .catch(() => sendNotice(PROFILE_NOT_UPDATED));
+        .catch(() => sendNotice(PROFILE_NOT_UPDATED, 'error'));
     };
 
     block.querySelectorAll('.role-cards-item').forEach((card) => {
@@ -222,8 +226,6 @@ async function decorateContent(block) {
 
       checkbox.addEventListener('change', handleCheckboxChange);
     });
-
-    decorateIcons(block);
   }
 }
 
@@ -231,7 +233,7 @@ export default async function decorate(block) {
   const blockInnerHTML = block.innerHTML;
   decorateContent(block);
 
-  globalEmitter.on('signupDialogClose', async () => {
+  signupDialogEventEmitter.on('signupDialogClose', async () => {
     block.innerHTML = blockInnerHTML;
     decorateContent(block);
   });
