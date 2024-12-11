@@ -2,7 +2,7 @@ import BrowseCardsDelegate from '../../scripts/browse-card/browse-cards-delegate
 import { htmlToElement } from '../../scripts/scripts.js';
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import { createTooltip, hideTooltipOnScroll } from '../../scripts/browse-card/browse-card-tooltip.js';
-import BuildPlaceholder from '../../scripts/browse-card/browse-card-placeholder.js';
+import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import { CONTENT_TYPES } from '../../scripts/data-service/coveo/coveo-exl-pipeline-constants.js';
 
 /**
@@ -32,8 +32,6 @@ export default async function decorate(block) {
   const contentType = CONTENT_TYPES.LIVE_EVENT.MAPPING_KEY;
   const noOfResults = 4;
   const solutionsParam = solutions !== '' ? formattedSolutionTags(solutions) : '';
-
-  headingElement.firstElementChild?.classList.add('h2');
 
   // Clearing the block's content
   block.innerHTML = '';
@@ -69,15 +67,15 @@ export default async function decorate(block) {
     contentType,
   };
 
-  const buildCardsShimmer = new BuildPlaceholder();
-  buildCardsShimmer.add(block);
+  const buildCardsShimmer = new BrowseCardShimmer();
+  buildCardsShimmer.addShimmer(block);
 
   const browseCardsContent = BrowseCardsDelegate.fetchCardData(parameters);
   browseCardsContent
     .then((data) => {
       // eslint-disable-next-line no-use-before-define
       const filteredLiveEventsData = fetchFilteredCardData(data, solutionsParam);
-      buildCardsShimmer.remove();
+      buildCardsShimmer.removeShimmer();
       if (filteredLiveEventsData?.length) {
         for (let i = 0; i < Math.min(noOfResults, filteredLiveEventsData.length); i += 1) {
           const cardData = filteredLiveEventsData[i];
@@ -91,7 +89,7 @@ export default async function decorate(block) {
       }
     })
     .catch((err) => {
-      buildCardsShimmer.remove();
+      buildCardsShimmer.removeShimmer();
       // eslint-disable-next-line no-console
       console.error('Events Cards:', err);
     });
