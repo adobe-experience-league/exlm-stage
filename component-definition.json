@@ -73,7 +73,35 @@
                   "filter": "article-content-section",
                   "name": "Article Content Section",
                   "model": "article-content-section",
-                  "style": "article-content-section"
+                  "style": "article-content-section",
+                  "text1": {
+                    "sling:resourceType": "core/franklin/components/text/v1/text",
+                    "name": "Text",
+                    "model": "text",
+                    "text": "<p>[Insert page summary here. 1-2 sentences are recommended for the page summary.]<br><br>To configure the page title, article author(s), and tags, navigate to Page-level properties by clicking Content Tree -&gt; Page -&gt; Properties. (remove this with text)</p>"
+                  },
+                  "article-tags": {
+                    "sling:resourceType": "core/franklin/components/block/v1/block",
+                    "name": "Tags",
+                    "model": "article-tags"
+                  },
+                  "text2": {
+                    "sling:resourceType": "core/franklin/components/text/v1/text",
+                    "name": "Text",
+                    "model": "text",
+                    "text": "<p>[Insert article body content here. Add additional blocks below as needed]</p>"
+                  },
+                  "social-share": {
+                    "sling:resourceType": "core/franklin/components/block/v1/block",
+                    "name": "Social Share",
+                    "model": "social-share",
+                    "social network": ["facebook", "twitter", "linkedin"]
+                  },
+                  "author-summary": {
+                    "sling:resourceType": "core/franklin/components/block/v1/block",
+                    "name": "Author Summary",
+                    "model": "author-summary"
+                  }
                 }
               }
             }
@@ -136,6 +164,23 @@
                   "model": "profile-section",
                   "style": "profile-section",
                   "filter": "profile-section"
+                }
+              }
+            }
+          }
+        },
+        {
+          "title": "Profile Bottom Section",
+          "id": "profile-bottom-section",
+          "plugins": {
+            "xwalk": {
+              "page": {
+                "resourceType": "core/franklin/components/section/v1/section",
+                "template": {
+                  "name": "Profile Bottom Section",
+                  "model": "profile-bottom-section",
+                  "style": ["profile-bottom-section", "default"],
+                  "filter": "profile-bottom-section"
                 }
               }
             }
@@ -287,7 +332,8 @@
                   "cta1Type": "primary",
                   "cta2Type": "primary",
                   "customHexCode": "FFFFFF",
-                  "classes": "light"
+                  "classes": "light",
+                  "dismissalTime": "sessionStorage"
                 }
               }
             }
@@ -933,7 +979,8 @@
                   "name": "Recommendation Marquee",
                   "model": "recommendation-marquee",
                   "roles": ["profile_context"],
-                  "filterProductBy": "all_adobe_products"
+                  "filterProductBy": "all_adobe_products",
+                  "headingType": "h2"
                 }
               }
             }
@@ -1138,6 +1185,22 @@
                 "resourceType": "core/franklin/components/block/v1/block",
                 "template": {
                   "name": "Topic Results"
+                }
+              }
+            }
+          }
+        },
+        {
+          "title": "Upcoming Event",
+          "id": "upcoming-event",
+          "plugins": {
+            "xwalk": {
+              "page": {
+                "resourceType": "core/franklin/components/block/v1/block",
+                "template": {
+                  "name": "Upcoming Event",
+                  "model": "upcoming-event",
+                  "headingType": "h2"
                 }
               }
             }

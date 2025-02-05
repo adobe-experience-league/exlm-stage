@@ -70,7 +70,7 @@ export default async function ProfileRail(block) {
     if (link && link.href === `${window.location.origin}${window.location.pathname}`) {
       link.href = '#';
       link.classList.add('active');
-      link.appendChild(htmlToElement('<span class="icon icon-chevron_down"></span>'));
+      link.appendChild(htmlToElement('<span class="icon icon-chevron-down"></span>'));
     }
   });
 
@@ -91,7 +91,7 @@ export default async function ProfileRail(block) {
       }
     } else {
       profileRailOverlay.classList.add('hidden');
-      block.querySelector('.profile-rail-links > li > a.active').classList.remove('overlay-active');
+      block.querySelector('.profile-rail-links > li > a.active')?.classList.remove('overlay-active');
     }
   });
 

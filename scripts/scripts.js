@@ -1,7 +1,6 @@
 /* eslint-disable no-console */
 /* eslint-disable no-bitwise */
 import {
-  sampleRUM,
   buildBlock,
   loadHeader,
   loadFooter,
@@ -27,7 +26,7 @@ import {
  * Load files async using import() if you must.
  */
 
-const LCP_BLOCKS = ['video-embed', 'marquee', 'article-marquee']; // add your LCP blocks to the list
+const LCP_BLOCKS = ['video-embed', 'marquee', 'article-marquee', 'personalized-content-placeholder']; // add your LCP blocks to the list
 
 /**
  * load fonts.css and set a session storage flag
@@ -695,7 +694,7 @@ export function getConfig() {
     communityAccountURL: isProd
       ? `https://experienceleaguecommunities.adobe.com/?profile.language=${communityLocale}`
       : `https://experienceleaguecommunities-dev.adobe.com/?profile.language=${communityLocale}`,
-    interestsUrl: `${cdnOrigin}/api/interests?page_size=200&sort=Order&lang=${lang}`,
+    interestsUrl: `${cdnOrigin}/api/interests?page_size=200&sort=Order`,
     // Param for localized Community Profile URL
     localizedCommunityProfileParam: `?profile.language=${communityLocale}`,
   };
@@ -839,7 +838,6 @@ async function loadLazy(doc) {
   if (window.location.search?.indexOf('martech=off') === -1) loadMartech(headerPromise, footerPromise);
   loadCSS(`${window.hlx.codeBasePath}/styles/lazy-styles.css`);
   loadFonts();
-  sampleRUM('lazy');
 }
 
 /**
@@ -905,14 +903,21 @@ export async function loadArticles() {
   }
 }
 
-function showSignupDialog() {
-  const urlParams = new URLSearchParams(window.location.search);
+async function showSignupDialog() {
   const isSignedIn = window?.adobeIMS?.isSignedInUser();
-  const { isProd } = getConfig();
-  if (isSignedIn && !isProd && urlParams.get('signup-wizard') === 'on') {
+  if (!isSignedIn) return;
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const { isProd, signUpFlowConfigDate, modalReDisplayDuration } = getConfig();
+
+  if (!isProd && urlParams.get('signup-wizard') === 'on') {
     // eslint-disable-next-line import/no-cycle
     import('./signup-flow/signup-flow-dialog.js').then((mod) => mod.default.init());
+    return;
   }
+
+  const { default: initSignupFlowHandler } = await import('./signup-flow/signup-flow-handler.js');
+  await initSignupFlowHandler(signUpFlowConfigDate, modalReDisplayDuration);
 }
 
 /**
@@ -1170,7 +1175,7 @@ async function loadPage() {
   loadArticles();
   await loadLazy(document);
   loadDelayed();
-  showSignupDialog();
+  await showSignupDialog();
 
   if (isDocPage) {
     // load prex/next buttons
@@ -1186,16 +1191,6 @@ async function loadPage() {
   }
 }
 
-/**
- * A simple shorter impl of alloy prehide script.
- * This is used for target A/B testing of home page, and should be removed after the test is done.
- */
-function prehidePageForTarget() {
-  const styleEl = htmlToElement(`<style> body { opacity: 0 !important } </style>`);
-  document.head.appendChild(styleEl);
-  setTimeout(() => styleEl?.parentNode?.removeChild(styleEl), 5000);
-}
-
 // load the page unless DO_NOT_LOAD_PAGE is set - used for existing EXLM pages POC
 (async () => {
   if (window.hlx.DO_NOT_LOAD_PAGE) return;
@@ -1208,7 +1203,6 @@ function prehidePageForTarget() {
   const { lang } = getPathDetails();
   document.documentElement.lang = lang || 'en';
   const isMainPage = window?.location.pathname === '/' || window?.location.pathname === `/${lang}`;
-  const PHP_AB = 'phpAB';
 
   const isUserSignedIn = async () => {
     await loadIms();
@@ -1238,15 +1232,9 @@ function prehidePageForTarget() {
     try {
       const signedIn = await isUserSignedIn();
       const { personalizedHomeLink } = getConfig() || {};
-      if (signedIn) {
-        // Execute the prehiding function
-        if (!sessionStorage.getItem(PHP_AB)) {
-          prehidePageForTarget();
-        }
-        if (personalizedHomeLink && sessionStorage.getItem(PHP_AB) === 'authHP') {
-          window.location.pathname = `${lang}${personalizedHomeLink}`;
-          return;
-        }
+      if (signedIn && personalizedHomeLink) {
+        window.location.pathname = `${lang}${personalizedHomeLink}`;
+        return;
       }
     } catch (error) {
       console.error('Error during redirect process:', error);

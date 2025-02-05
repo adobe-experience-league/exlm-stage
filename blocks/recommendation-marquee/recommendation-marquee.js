@@ -13,10 +13,18 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import ResponsivePillList from '../../scripts/responsive-pill-list/responsive-pill-list.js';
 import defaultAdobeTargetClient from '../../scripts/adobe-target/adobe-target.js';
 import BrowseCardsTargetDataAdapter from '../../scripts/browse-card/browse-cards-target-data-adapter.js';
+import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
 
 const targetEventEmitter = getEmitter('loadTargetBlocks');
+const signupDialogEventEmitter = getEmitter('signupDialog');
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 const DEFAULT_NUM_CARDS = 5;
+let seeMoreFlag = false;
+const seeMoreConfig = {
+  minWidth: 1024,
+  noOfRows: 2,
+};
+
 let placeholders = {};
 
 const countNumberAsArray = (n) => Array.from({ length: n }, (_, i) => n - i);
@@ -30,6 +38,87 @@ const countNumberAsArray = (n) => Array.from({ length: n }, (_, i) => n - i);
  * @returns {string} - A string of HTML containing the shimmer divs with inline styles for width and height.
  *
  */
+
+function createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock) {
+  if (!block.querySelector('.recommendation-marquee-see-more-btn')) {
+    const btnContainer = document.createElement('div');
+    const btn = document.createElement('button');
+    btn.innerHTML = placeholders?.recommendedContentSeeMoreButtonText || 'See more Recommendations';
+    btnContainer.classList.add('recommendation-marquee-see-more-btn');
+    btnContainer.appendChild(btn);
+    contentDiv.insertAdjacentElement('afterend', btnContainer);
+
+    btn.addEventListener('click', () => {
+      seeMoreFlag = true;
+      const contentDivs = block.querySelectorAll('.recommendation-marquee-block-section');
+      const currentRow = parseInt(block.dataset.browseCardRows, 10);
+      const maxRows = parseInt(block.dataset.maxRows, 10);
+      const newRow = currentRow ? currentRow + 1 : 2;
+      block.dataset.browseCardRows = newRow;
+      const { allRowsLoaded } = block.dataset;
+
+      function hideSeeMoreRows() {
+        seeMoreFlag = false;
+        contentDivs.forEach((div, index) => {
+          if (index > 0) {
+            div.classList.add('fade-out');
+            div.classList.remove('fade-in');
+            const handleTransitionEnd = () => {
+              div.style.display = 'none';
+              div.removeEventListener('animationend', handleTransitionEnd);
+            };
+            div.addEventListener('animationend', handleTransitionEnd);
+          }
+        });
+        btn.innerHTML = placeholders?.recommendedContentSeeMoreButtonText || 'See more Recommendations';
+        block.dataset.browseCardRows = 1;
+        setTimeout(() => {
+          block.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
+      }
+
+      function showNewRow() {
+        contentDivs.forEach((div, index) => {
+          div.style.display = 'flex';
+
+          if (index > newRow - 1) {
+            div.style.display = 'none';
+            div.classList.remove('fade-in');
+            div.classList.add('fade-out');
+          } else {
+            div.classList.add('fade-in');
+            div.classList.remove('fade-out');
+          }
+        });
+      }
+
+      if (allRowsLoaded === 'true' && newRow > seeMoreConfig.noOfRows) {
+        hideSeeMoreRows();
+      } else if (allRowsLoaded === 'true' && maxRows) {
+        if (newRow > maxRows) {
+          hideSeeMoreRows();
+        } else {
+          if (newRow === maxRows) {
+            btn.innerHTML = placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+          }
+          showNewRow();
+        }
+      } else if (allRowsLoaded === 'true') {
+        if (newRow === seeMoreConfig.noOfRows) {
+          btn.innerHTML = placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+        }
+        showNewRow();
+      } else {
+        if (newRow === seeMoreConfig.noOfRows) {
+          block.dataset.allRowsLoaded = true;
+          btn.innerHTML = placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+        }
+        const optionType = block.querySelector('.browse-cards-block-content').dataset.selected;
+        fetchDataAndRenderBlock(optionType, { renderCards: true, createRow: true, clearSeeMoreRows: false });
+      }
+    });
+  }
+}
 
 function generateLoadingShimmer(shimmerSizes = [[100, 30]]) {
   return shimmerSizes
@@ -48,10 +137,22 @@ function generateLoadingShimmer(shimmerSizes = [[100, 30]]) {
  * @returns {void}
  */
 export function updateCopyFromTarget(data, heading, subheading, taglineCta, taglineText) {
-  if (data?.meta?.heading && heading) heading.innerHTML = data.meta.heading;
-  else heading?.remove();
-  if (data?.meta?.subheading && subheading) subheading.innerHTML = data.meta.subheading;
-  else subheading?.remove();
+  if (isFeatureEnabled('recMarqueeTargetHeading')) {
+    if (data?.meta?.heading && heading) {
+      if (heading.firstElementChild && !heading.firstElementChild.className.includes('loading-shimmer')) {
+        heading.firstElementChild.innerHTML = data.meta.heading;
+      } else {
+        heading.innerHTML = data.meta.heading;
+      }
+    } else {
+      heading?.remove();
+    }
+    if (data?.meta?.subheading && subheading) subheading.innerHTML = data.meta.subheading;
+    else subheading?.remove();
+  } else {
+    heading?.remove();
+    subheading?.remove();
+  }
   if (
     taglineCta &&
     data?.meta['tagline-cta-text'] &&
@@ -156,8 +257,6 @@ async function findEmptyFilters(targetCriteriaId, profileInterests = []) {
 
 const interestDataPromise = fetchInterestData();
 
-const ALL_ADOBE_OPTIONS_KEY = placeholders?.allAdobeProducts || 'All Adobe Products';
-
 const renderCardPlaceholders = (contentDiv, renderCardsFlag = true) => {
   const cardDiv = document.createElement('div');
   cardDiv.classList.add('card-wrapper');
@@ -178,11 +277,28 @@ const renderCardPlaceholders = (contentDiv, renderCardsFlag = true) => {
  * @param {HTMLElement} block - The block of data to process.
  */
 export default async function decorate(block) {
-  const placeholderPromise = fetchLanguagePlaceholders();
+  try {
+    placeholders = await fetchLanguagePlaceholders();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Error fetching placeholders:', err);
+  }
+
+  const ALL_ADOBE_OPTIONS_KEY = placeholders?.allAdobeProducts || 'All Adobe Products';
+
   // Extracting elements from the block
   const htmlElementData = [...block.children].map((row) => row.firstElementChild);
-  const [linkEl, resultTextEl, sortEl, roleEl, solutionEl, filterProductByOptionEl, ...contentTypesEl] =
+
+  const [coveoToggle, linkEl, resultTextEl, sortEl, roleEl, solutionEl, filterProductByOptionEl, ...restOfEl] =
     htmlElementData.reverse();
+
+  const showOnlyCoveo = coveoToggle?.textContent?.toLowerCase() === 'true';
+  if (showOnlyCoveo) {
+    block.classList.add('coveo-only');
+  }
+
+  const [headingElement, descriptionElement, ...contentTypesEl] = restOfEl.reverse();
+  const headingElementNode = htmlToElement(headingElement.innerHTML);
   const recommendedContentShimmer = `
   <div class="recommendation-marquee-header">${generateLoadingShimmer([[50, 14]])}</div>
   <div class="recommendation-marquee-description">${generateLoadingShimmer([[50, 10]])}</div>
@@ -200,11 +316,8 @@ export default async function decorate(block) {
   const headerContainer = block.querySelector('.recommendation-marquee-header');
   const descriptionContainer = block.querySelector('.recommendation-marquee-description');
 
-  headerContainer.style.display = 'none';
-  descriptionContainer.style.display = 'none';
-
   const targetCriteriaId = block.dataset.targetScope;
-  const profileDataPromise = defaultProfileClient.getMergedProfile();
+  let profileDataPromise = defaultProfileClient.getMergedProfile();
 
   const tempWrapper = htmlToElement(`
       <div class="recommendation-marquee-temp-wrapper">
@@ -283,10 +396,10 @@ export default async function decorate(block) {
                     delayedCardData.splice(0, 1);
                   }
                   if (renderCards) {
-                    if (cardModel.id) {
+                    if (cardModel && cardModel.id) {
                       dataConfiguration[lowercaseOptionType].renderedCardIds.push(cardModel.id);
+                      cardModel.truncateDescription = false;
                     }
-                    cardModel.truncateDescription = false;
                     buildCard(contentDiv, wrapperDiv, cardModel);
                   }
                   cardModelsList.push(cardModel);
@@ -317,6 +430,10 @@ export default async function decorate(block) {
       placeholders?.recommendedContentNoResultsText ||
       `We couldn’t find specific matches, but here are the latest tutorials/articles that others are loving right now!`;
     recommendedContentNoResultsElement.innerHTML = noResultsText;
+    const btn = block.querySelector('.recommendation-marquee-see-more-btn');
+    if (btn) {
+      btn.classList.add('hide');
+    }
   };
 
   const renderCardBlock = (parentDiv) => {
@@ -324,7 +441,11 @@ export default async function decorate(block) {
       block.removeChild(tempWrapper);
     }
     const contentDiv = document.createElement('div');
-    contentDiv.classList.add('browse-cards-block-content', 'recommendation-marquee-block-section');
+    contentDiv.classList.add(
+      'browse-cards-block-content',
+      'recommendation-marquee-block-section',
+      'recommendation-marquee-wrap',
+    );
     parentDiv.appendChild(contentDiv);
     resultTextEl.classList.add('recommendation-marquee-discover-resource');
     linkEl.classList.add('recommendation-marquee-result-link');
@@ -369,36 +490,28 @@ export default async function decorate(block) {
       if (profileInterests.length === 0) {
         // filterSectionElement.style.display = 'none';
         blockHeader.style.display = 'none';
-        defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
       } else if (profileInterests.length === 1) {
         // filterSectionElement.style.display = 'none';
-        defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
+        blockHeader.style.display = 'block';
       } else {
+        blockHeader.style.display = 'block';
+      }
+      if (defaultOptionsKey.length === 0) {
         defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
       }
-
-      if (!(targetSupport && targetCriteriaScopeId)) {
-        // headerContainer.innerHTML = headingElement.innerText;
-        // descriptionContainer.innerHTML = descriptionElement.innerText;
+      const coveoFlowDetection = !(targetSupport && targetCriteriaScopeId);
+      if (headingElementNode) {
+        headerContainer.innerHTML = '';
+        headerContainer.appendChild(headingElementNode);
+      }
+      if (coveoFlowDetection) {
+        headerContainer.innerHTML = headingElement.innerHTML;
+        descriptionContainer.innerHTML = descriptionElement.innerHTML;
         setCoveoCountAsBlockAttribute();
         block.style.display = 'block';
       }
 
       const sortByContent = sortEl?.innerText?.trim();
-      const contentTypes = contentTypesEl?.map((contentTypeEL) => contentTypeEL?.innerText?.trim()).reverse() || [];
-      const contentTypeIsEmpty = contentTypes?.length === 0;
-      const numberOfResults = contentTypeIsEmpty ? DEFAULT_NUM_CARDS : 1;
-
-      contentTypesFetchMap = contentTypeIsEmpty
-        ? { '': DEFAULT_NUM_CARDS }
-        : contentTypes.reduce((acc, curr) => {
-            if (!acc[curr]) {
-              acc[curr] = 1;
-            } else {
-              acc[curr] += 1;
-            }
-            return acc;
-          }, {});
 
       const encodedSolutionsText = solutionEl.innerText?.trim() ?? '';
       const { products, versions, features } = extractCapability(encodedSolutionsText);
@@ -455,7 +568,32 @@ export default async function decorate(block) {
               data = cardResponse.allAdobeProducts;
             }
           }
-          data = await BrowseCardsTargetDataAdapter.mapResultsToCardsData(data.slice(0, DEFAULT_NUM_CARDS));
+          const cardWithThumbnail = data.find((res) => res.thumbnail !== '');
+          if (cardWithThumbnail) {
+            data = data.filter((item) => item !== cardWithThumbnail);
+            data.unshift(cardWithThumbnail);
+          }
+          const numberOfExistingCards = block.querySelectorAll('.card-wrapper a');
+          const isWideScreen = window.innerWidth > 1432;
+          const defaultCardCount = isWideScreen ? 3 : 2;
+          const index = numberOfExistingCards.length ? numberOfExistingCards.length : 0;
+          if (!data[index + (seeMoreFlag ? defaultCardCount : DEFAULT_NUM_CARDS)] && !block.dataset.browseCardRows) {
+            const btn = block.querySelector('.recommendation-marquee-see-more-btn');
+            if (btn) {
+              btn.classList.add('hide');
+            }
+          }
+          if (!data[index + (seeMoreFlag ? defaultCardCount : DEFAULT_NUM_CARDS)] && block.dataset.browseCardRows) {
+            const btn = block.querySelector('.recommendation-marquee-see-more-btn > button');
+            if (btn) {
+              btn.innerHTML = placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+            }
+            block.dataset.allRowsLoaded = true;
+            block.dataset.maxRows = block.dataset.browseCardRows;
+          }
+          data = await BrowseCardsTargetDataAdapter.mapResultsToCardsData(
+            data.slice(index, index + (seeMoreFlag ? defaultCardCount : DEFAULT_NUM_CARDS)),
+          );
         } else {
           const { data: cards = [], contentType: ctType } = cardResponse || {};
           const { shimmers: cardShimmers, payload: apiPayload, wrappers: cardWrappers } = apiConfigObject;
@@ -490,8 +628,81 @@ export default async function decorate(block) {
         return data;
       }
 
-      const fetchDataAndRenderBlock = async (optionType, renderCards = true) => {
-        const contentDiv = block.querySelector('.recommendation-marquee-block-section');
+      const fetchDataAndRenderBlock = async (
+        optionType,
+        args = { renderCards: true, createRow: false, clearAllRows: false, clearSeeMoreRows: true },
+      ) => {
+        const btn = block.querySelector('.recommendation-marquee-see-more-btn');
+        if (btn) {
+          btn.classList.remove('hide');
+        }
+        let contentTypes = contentTypesEl?.map((contentTypeEL) => contentTypeEL?.innerText?.trim()) || [];
+        contentTypes = contentTypes.slice(0, DEFAULT_NUM_CARDS);
+        const contentTypeIsEmpty = contentTypes?.length === 0;
+        let noOfRows = parseInt(block.dataset.browseCardRows, 10);
+        if (!noOfRows) noOfRows = 1;
+        let numberOfResults;
+        if (seeMoreFlag) {
+          numberOfResults = window.innerWidth > 1432 ? 3 : 2;
+        } else {
+          numberOfResults = contentTypeIsEmpty ? DEFAULT_NUM_CARDS * noOfRows : 1 * noOfRows;
+        }
+        let firstResult = 0;
+
+        contentTypesFetchMap = contentTypeIsEmpty
+          ? { '': DEFAULT_NUM_CARDS }
+          : contentTypes.reduce((acc, curr) => {
+              if (!acc[curr]) {
+                acc[curr] = 1;
+              } else {
+                acc[curr] += 1;
+              }
+              return acc;
+            }, {});
+
+        let contentDiv = block.querySelector('.recommendation-marquee-block-section');
+
+        if (args.clearAllRows) {
+          // Remove the existing cards container
+          block.removeAttribute('data-all-rows-loaded');
+          block.removeAttribute('data-browse-card-rows');
+          block.removeAttribute('data-max-rows');
+          block.querySelectorAll('.recommendation-marquee-block-section').forEach((div) => {
+            div.remove();
+          });
+        }
+
+        if (args.clearSeeMoreRows) {
+          block.removeAttribute('data-all-rows-loaded');
+          block.removeAttribute('data-browse-card-rows');
+          block.removeAttribute('data-max-rows');
+          const contentDivs = block.querySelectorAll('.recommendation-marquee-block-section');
+          contentDivs.forEach((div, index) => {
+            if (index > 0) {
+              div.remove();
+            }
+          });
+          block.removeAttribute('data-browse-card-rows');
+        }
+
+        if (args.createRow) {
+          const newContentDiv = document.createElement('div');
+          newContentDiv.classList.add('browse-cards-block-content', 'recommendation-marquee-block-section', 'fade-in');
+          const contentDivs = block.querySelectorAll('.recommendation-marquee-block-section');
+          if (contentDivs.length) {
+            contentDivs[contentDivs.length - 1].insertAdjacentElement('afterEnd', newContentDiv);
+          } else {
+            block
+              .querySelector('.recommendation-marquee-block-header')
+              ?.insertAdjacentElement('afterEnd', newContentDiv);
+          }
+          contentDiv = newContentDiv;
+          if (seeMoreFlag) {
+            firstResult = DEFAULT_NUM_CARDS + (contentDivs.length - 1) * (window.innerWidth > 1432 ? 3 : 2);
+          } else {
+            firstResult = contentDivs.length * DEFAULT_NUM_CARDS;
+          }
+        }
         const lowercaseOptionType = optionType?.toLowerCase();
         const saveCardResponse =
           [ALL_ADOBE_OPTIONS_KEY.toLowerCase()].includes(lowercaseOptionType) && cardIdsToExclude.length === 0;
@@ -500,7 +711,13 @@ export default async function decorate(block) {
         }
         dataConfiguration[lowercaseOptionType].renderedCardIds = [];
         contentDiv.dataset.selected = lowercaseOptionType;
-        contentDiv.setAttribute('data-analytics-filter-id', lowercaseOptionType);
+        let analyticsProductName = '';
+        if ([ALL_ADOBE_OPTIONS_KEY.toLowerCase()].includes(lowercaseOptionType)) {
+          analyticsProductName = 'all adobe products';
+        } else {
+          analyticsProductName = lowercaseOptionType;
+        }
+        contentDiv.setAttribute('data-analytics-filter-id', analyticsProductName);
         const showDefaultOptions = defaultOptionsKey.some((key) => lowercaseOptionType === key.toLowerCase());
         const interest = filterOptions.find((opt) => opt.toLowerCase() === lowercaseOptionType);
         const expLevelIndex = sortedProfileInterests.findIndex((s) => s === interest);
@@ -528,6 +745,7 @@ export default async function decorate(block) {
         }
 
         const params = {
+          firstResult,
           contentType: null,
           product: clonedProducts,
           feature: showDefaultOptions && features.length ? [...new Set(features)] : null,
@@ -539,7 +757,7 @@ export default async function decorate(block) {
           context: showDefaultOptions ? {} : { interests: [interest], experience: [expLevel], role: profileRoles },
         };
 
-        if (renderCards) {
+        if (args.renderCards) {
           resetContentDiv(contentDiv);
         }
 
@@ -548,17 +766,17 @@ export default async function decorate(block) {
           const cardShimmers = [];
           const wrappers = [];
           countNumberAsArray(DEFAULT_NUM_CARDS).forEach(() => {
-            const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, renderCards);
+            const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, args.renderCards);
             cardShimmers.push(shimmer);
             wrappers.push(wrapper);
           });
           const payloadConfig = {
             targetSupport: true,
             shimmers: cardShimmers,
+            renderCards: args.renderCards,
             wrappers,
             params,
             optionType,
-            renderCards,
             lowercaseOptionType,
           };
           targetPromises.push(
@@ -597,8 +815,49 @@ export default async function decorate(block) {
           );
           return targetPromises;
         };
-        const prepareV2CardPromise = () =>
-          Object.keys(contentTypesFetchMap).map((contentType) => {
+        const prepareV2CardPromise = () => {
+          if (seeMoreFlag) {
+            const payload = {
+              ...params,
+              contentType: [''],
+            };
+            const cardShimmers = [];
+            const wrappers = [];
+            const { noOfResults } = payload;
+            countNumberAsArray(noOfResults).forEach(() => {
+              const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, args.renderCards);
+              cardShimmers.push(shimmer);
+              wrappers.push(wrapper);
+            });
+            const payloadConfig = {
+              payload,
+              shimmers: cardShimmers,
+              contentType: '',
+              wrappers,
+              renderCards: args.renderCards,
+              lowercaseOptionType,
+            };
+
+            return [
+              new Promise((resolve) => {
+                getCardsData(payload).then(async (resp) => {
+                  const cardModels = await parseCardResponseData(resp, payloadConfig);
+                  let renderedCardModels = [];
+                  if (cardModels?.length) {
+                    const renderPromises = renderCardsBlock(cardModels, payloadConfig, contentDiv);
+                    renderedCardModels = await Promise.all(renderPromises);
+                  }
+                  resolve({
+                    data: cardModels,
+                    payloadConfig,
+                    renderedCardModels,
+                  });
+                });
+              }),
+            ];
+          }
+
+          return Object.keys(contentTypesFetchMap).map((contentType) => {
             const payload = {
               ...params,
             };
@@ -612,7 +871,7 @@ export default async function decorate(block) {
             const cardShimmers = [];
             const wrappers = [];
             countNumberAsArray(noOfResults).forEach(() => {
-              const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, renderCards);
+              const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, args.renderCards);
               cardShimmers.push(shimmer);
               wrappers.push(wrapper);
             });
@@ -622,7 +881,7 @@ export default async function decorate(block) {
               shimmers: cardShimmers,
               contentType: payloadContentType,
               wrappers,
-              renderCards,
+              renderCards: args.renderCards,
               lowercaseOptionType,
             };
             return new Promise((resolve) => {
@@ -641,6 +900,7 @@ export default async function decorate(block) {
               });
             });
           });
+        };
 
         const cardPromises = targetSupport ? prepareTargetBlockCardPromise() : prepareV2CardPromise();
 
@@ -667,6 +927,9 @@ export default async function decorate(block) {
               return;
             }
             const cardsCount = contentDiv.querySelectorAll('.browse-card').length;
+            if (cardsCount !== 0) {
+              createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock);
+            }
             if (cardsCount === 0) {
               Array.from(contentDiv.querySelectorAll('.browse-card-shimmer')).forEach((shimmerEl) => {
                 shimmerEl.remove();
@@ -674,6 +937,24 @@ export default async function decorate(block) {
               buildNoResultsContent(contentDiv, false);
               buildNoResultsContent(contentDiv, true);
               recommendedContentNoResults(contentDiv);
+
+              if (!targetSupport) {
+                if (!block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn?.classList.add('hide');
+                  }
+                }
+
+                if (block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn.firstElementChild.innerHTML =
+                      placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+                  }
+                  block.dataset.allRowsLoaded = true;
+                  block.dataset.maxRows = block.dataset.browseCardRows;
+                }
+              }
+
               return;
             }
             const noResultsContent = block.querySelector('.browse-card-no-results');
@@ -686,6 +967,27 @@ export default async function decorate(block) {
               const classOp =
                 contentDiv?.scrollWidth && contentDiv.scrollWidth <= contentDiv.offsetWidth ? 'add' : 'remove';
               navSectionEl.classList[classOp]('recommended-content-hidden');
+            }
+
+            if (!targetSupport) {
+              if (contentDiv.querySelectorAll('.browse-card').length < DEFAULT_NUM_CARDS) {
+                if (!block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn?.classList.add('hide');
+                  }
+                }
+
+                if (block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn.firstElementChild.innerHTML =
+                      placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+                  }
+                  block.dataset.allRowsLoaded = true;
+                  block.dataset.maxRows = block.dataset.browseCardRows;
+                }
+              } else if (btn) {
+                btn.classList.remove('hide');
+              }
             }
           })
           .catch((err) => {
@@ -715,6 +1017,14 @@ export default async function decorate(block) {
 
       const defaultOption = defaultFilterOption ? convertToTitleCase(defaultFilterOption) : null;
 
+      function renderButtonPlaceholder() {
+        seeMoreFlag = false;
+        const btn = block.querySelector('.recommendation-marquee-see-more-btn > button');
+        if (btn) {
+          btn.innerHTML = placeholders?.recommendedContentSeeMoreButtonText || 'See more Recommendations';
+        }
+      }
+
       // eslint-disable-next-line no-new
       new ResponsivePillList({
         wrapper: blockHeader,
@@ -722,42 +1032,52 @@ export default async function decorate(block) {
         defaultSelected: defaultOption,
         onInitCallback: () => {
           /* Reused the existing method */
+          renderButtonPlaceholder();
           renderCardBlock(block);
           fetchDataAndRenderBlock(defaultOption);
           if (containsAllAdobeProductsTab && defaultOption !== ALL_ADOBE_OPTIONS_KEY) {
             setTimeout(() => {
-              fetchDataAndRenderBlock(ALL_ADOBE_OPTIONS_KEY, false); // pre-fetch all my tab cards to avoid duplicates in indvidual tab. Timeout helps with 429 status code of v2 calls.
+              fetchDataAndRenderBlock(ALL_ADOBE_OPTIONS_KEY, { renderCards: false }); // pre-fetch all my tab cards to avoid duplicates in indvidual tab. Timeout helps with 429 status code of v2 calls.
             }, 500);
           }
         },
         onSelectCallback: (selectedItem) => {
           /* Reused the existing method */
           if (selectedItem) {
-            fetchDataAndRenderBlock(selectedItem);
+            renderButtonPlaceholder();
+            fetchDataAndRenderBlock(selectedItem, { renderCards: true, createRow: false, clearSeeMoreRows: true });
           }
         },
       });
     });
   }
 
-  try {
-    placeholders = await placeholderPromise;
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('Error fetching placeholders:', err);
-  }
-
   targetEventEmitter.on('dataChange', async (data) => {
     const blockId = block.id;
     const { blockId: targetBlockId, scope } = data.value;
-    if (targetBlockId === blockId) {
+    if (targetBlockId === blockId && !showOnlyCoveo) {
       renderBlock({ targetSupport: true, targetCriteriaScopeId: scope });
     }
   });
 
-  defaultAdobeTargetClient.checkTargetSupport().then(async (targetSupport) => {
-    if (targetCriteriaId || !targetSupport) {
-      renderBlock({ targetSupport, targetCriteriaScopeId: targetCriteriaId });
-    }
+  function handleTargetSupportAndRender(targetScopeId = '') {
+    defaultAdobeTargetClient.checkTargetSupport().then(async (targetSupport) => {
+      if (!targetSupport) {
+        renderBlock({ targetSupport: false, targetCriteriaScopeId: '' });
+      } else if (targetScopeId) {
+        renderBlock({ targetSupport, targetCriteriaScopeId: targetScopeId });
+      }
+    });
+  }
+
+  signupDialogEventEmitter.on('signupDialogClose', () => {
+    profileDataPromise = defaultProfileClient.getMergedProfile();
+    handleTargetSupportAndRender(block.dataset.targetScope);
   });
+
+  if (showOnlyCoveo) {
+    renderBlock({ targetSupport: false, targetCriteriaScopeId: '' });
+  } else {
+    handleTargetSupportAndRender(targetCriteriaId);
+  }
 }

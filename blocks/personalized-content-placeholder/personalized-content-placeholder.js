@@ -3,8 +3,10 @@ import { defaultProfileClient } from '../../scripts/auth/profile.js';
 import { loadBlocks, decorateSections, decorateBlocks } from '../../scripts/lib-franklin.js';
 import getEmitter from '../../scripts/events.js';
 import { moveInstrumentation } from '../../scripts/utils/ue-utils.js';
+import defaultAdobeTargetClient from '../../scripts/adobe-target/adobe-target.js';
 
 const signupDialogEventEmitter = getEmitter('signupDialog');
+const targetEventEmitter = getEmitter('loadTargetBlocks');
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 
 // Will be refactoring this function to use a loadFragment() function from scripts.js
@@ -40,9 +42,6 @@ const decoratePersonalizedContent = async (block) => {
   let [completePageURL, incompletePageURL] = [...block.children].map((row) => row.querySelector('a')?.href);
   block.textContent = '';
   document.body.classList.add('profile-home-page');
-  document.body.appendChild(
-    htmlToElement('<div class="profile-background" role="presentation" aria-hidden="true"></div>'),
-  );
   if (completePageURL && incompletePageURL) {
     if (window.hlx.aemRoot) {
       completePageURL = completePageURL.replace('.html', '');
@@ -84,6 +83,28 @@ export default async function decorate(block) {
     await decoratePersonalizedContent(block);
     if (!UEAuthorMode) {
       currentSection.classList.add('personalized-content-hidden');
+    }
+
+    const isTargetSupported = await defaultAdobeTargetClient.checkTargetSupport();
+    if (isTargetSupported) {
+      const profileContainer = document.querySelector('.profile-custom-container');
+      const recsBlocks = profileContainer.querySelectorAll(
+        '.recommended-content:not(.recommended-content.coveo-only), .recently-reviewed, .recommendation-marquee:not(.recommendation-marquee.coveo-only)',
+      );
+      // Regenerate Id's for the re-rendered recs block
+      recsBlocks.forEach((recsBlock, index) => {
+        const { blockName } = recsBlock.dataset; // Destructure blockName
+        const randomId = Math.random().toString(36).substring(2); // Generate random ID once
+        const blockId = blockName === 'recommendation-marquee' ? `rm-${randomId}` : `rc-${randomId}`;
+
+        const item = {
+          blockId,
+          scope: `exl-hp-auth-recs-${index + 1}`,
+        };
+
+        recsBlock.id = item.blockId;
+        targetEventEmitter.set('blockId', item);
+      });
     }
   });
 }

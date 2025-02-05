@@ -13,7 +13,7 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 import defaultAdobeTargetClient from '../../scripts/adobe-target/adobe-target.js';
 import BrowseCardsTargetDataAdapter from '../../scripts/browse-card/browse-cards-target-data-adapter.js';
-import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
+import { hideTooltipOnScroll } from '../../scripts/browse-card/browse-card-tooltip.js';
 
 let placeholders = {};
 try {
@@ -30,10 +30,11 @@ let cardsWidth;
 let cardsGap;
 const seeMoreConfig = {
   minWidth: 1024,
-  noOfRows: 4,
+  noOfRows: 2,
 };
-
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
+
+const signupDialogEventEmitter = getEmitter('signupDialog');
 
 // Event for target data change (Updating the block based on target data)
 const targetEventEmitter = getEmitter('loadTargetBlocks');
@@ -74,9 +75,14 @@ function calculateNumberOfCardsToRender(container) {
         section.style.visibility = 'visible';
       }
     }
-
-    if (!cardsWidth) cardsWidth = cardsContainer?.offsetWidth || 256;
-    if (!cardsGap) cardsGap = parseInt(getComputedStyle(cardsContainer).gap, 10) || 24;
+    const DEFAULT_CARD_WIDTH = 256;
+    const DEFAULT_CARD_GAP = 24;
+    if (!cardsWidth) cardsWidth = cardsContainer?.offsetWidth || DEFAULT_CARD_WIDTH;
+    if (!cardsGap) {
+      cardsGap = cardsContainer
+        ? parseInt(getComputedStyle(cardsContainer).gap, 10) || DEFAULT_CARD_GAP
+        : DEFAULT_CARD_GAP;
+    }
     const visibleItems = Math.floor((containerWidth + cardsGap) / (cardsWidth + cardsGap));
     if (visibleItems) {
       DEFAULT_NUM_CARDS = visibleItems;
@@ -106,18 +112,26 @@ function createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock) {
           if (index > 0) {
             div.classList.add('fade-out');
             div.classList.remove('fade-in');
+            const handleTransitionEnd = () => {
+              div.style.display = 'none';
+              div.removeEventListener('animationend', handleTransitionEnd);
+            };
+            div.addEventListener('animationend', handleTransitionEnd);
           }
         });
         btn.innerHTML = placeholders?.recommendedContentSeeMoreButtonText || 'See more Recommendations';
         block.dataset.browseCardRows = 1;
+        setTimeout(() => {
+          block.scrollIntoView({ behavior: 'smooth' });
+        }, 300);
       }
 
       function showNewRow() {
         contentDivs.forEach((div, index) => {
-          // div.style.display = 'flex';
+          div.style.display = 'flex';
 
           if (index > newRow - 1) {
-            // div.style.display = 'none';
+            div.style.display = 'none';
             div.classList.remove('fade-in');
             div.classList.add('fade-out');
           } else {
@@ -191,8 +205,15 @@ function resizeObserverHandler(callback, block) {
  * @returns {void}
  */
 export function updateCopyFromTarget(data, heading, subheading, taglineCta, taglineText) {
-  if (data?.meta?.heading && heading) heading.innerHTML = data.meta.heading;
-  else heading?.remove();
+  if (data?.meta?.heading && heading) {
+    if (heading.firstElementChild && !heading.firstElementChild.className.includes('loading-shimmer')) {
+      heading.firstElementChild.innerHTML = data.meta.heading;
+    } else {
+      heading.innerHTML = data.meta.heading;
+    }
+  } else {
+    heading?.remove();
+  }
   if (data?.meta?.subheading && subheading) subheading.innerHTML = data.meta.subheading;
   else subheading?.remove();
   if (
@@ -321,6 +342,7 @@ export default async function decorate(block) {
   block.innerHTML = '';
 
   filterSectionElement.classList.add('recommended-content-filter-heading');
+  const headingElementNode = htmlToElement(headingElement.innerHTML);
   const blockHeader = createTag('div', { class: 'recommended-content-block-header' });
   blockHeader.innerHTML = generateLoadingShimmer([[80, 30]]);
   block.insertAdjacentHTML('afterbegin', recommendedContentShimmer);
@@ -330,10 +352,14 @@ export default async function decorate(block) {
   const headerContainer = block.querySelector('.recommended-content-header');
   const descriptionContainer = block.querySelector('.recommended-content-description');
   const reversedDomElements = remainingElements.reverse();
-  const [linkEl, resultTextEl, sortEl, roleEl, solutionEl, filterProductByOptionEl, ...contentTypesEl] =
+  const [coveoToggle, linkEl, resultTextEl, sortEl, roleEl, solutionEl, filterProductByOptionEl, ...contentTypesEl] =
     reversedDomElements;
+  const showOnlyCoveo = coveoToggle?.textContent?.toLowerCase() === 'true';
+  if (showOnlyCoveo) {
+    block.classList.add('coveo-only');
+  }
   const targetCriteriaId = block.dataset.targetScope;
-  const profileDataPromise = defaultProfileClient.getMergedProfile();
+  let profileDataPromise = defaultProfileClient.getMergedProfile();
 
   const tempWrapper = htmlToElement(`
       <div class="recommended-content-temp-wrapper">
@@ -342,6 +368,7 @@ export default async function decorate(block) {
     `);
   const tempContentSection = tempWrapper.querySelector('.recommended-content-block-section');
   block.appendChild(tempWrapper);
+  calculateNumberOfCardsToRender(block);
   countNumberAsArray(DEFAULT_NUM_CARDS).forEach(() => {
     const { shimmer: shimmerInstance, wrapper } = renderCardPlaceholders(tempWrapper);
     shimmerInstance.addShimmer(wrapper);
@@ -353,7 +380,7 @@ export default async function decorate(block) {
   const cardIdsToExclude = [];
   const allMyProductsCardModels = [];
   const dataConfiguration = {};
-
+  let isTooltipListenerAdded = false;
   resizeObserved = false;
 
   function calculateNumberOfCardsOnResize(fetchDataAndRenderBlock) {
@@ -365,10 +392,8 @@ export default async function decorate(block) {
             const { width } = entry.contentRect;
             if (Math.abs(entry.contentRect.width - previousWidth) > 1) {
               const optionType = block.querySelector('.browse-cards-block-content').dataset.selected;
-              if (isFeatureEnabled('browsecardv2')) {
-                // Calculate no. of cards that fits
-                calculateNumberOfCardsToRender(block);
-              }
+              // Calculate no. of cards that fits
+              calculateNumberOfCardsToRender(block);
               // Render the new set of cards
               fetchDataAndRenderBlock(optionType, { renderCards: true, createRow: true, clearAllRows: true });
               previousWidth = width;
@@ -437,7 +462,7 @@ export default async function decorate(block) {
                     delayedCardData.splice(0, 1);
                   }
                   if (renderCards) {
-                    if (cardModel.id) {
+                    if (cardModel && cardModel.id) {
                       dataConfiguration[lowercaseOptionType].renderedCardIds.push(cardModel.id);
                     }
                     buildCard(contentDiv, wrapperDiv, cardModel);
@@ -521,23 +546,29 @@ export default async function decorate(block) {
       if (profileInterests.length === 0) {
         if (!UEAuthorMode) filterSectionElement.style.display = 'none';
         if (!UEAuthorMode) blockHeader.style.display = 'none';
-        defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
       } else if (profileInterests.length === 1) {
         if (!UEAuthorMode) filterSectionElement.style.display = 'none';
-        defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
+        blockHeader.style.display = 'block';
       } else {
+        filterSectionElement.style.display = 'block';
+        blockHeader.style.display = 'block';
+      }
+      if (defaultOptionsKey.length === 0) {
         defaultOptionsKey.push(ALL_ADOBE_OPTIONS_KEY);
       }
-
-      if (!(targetSupport && targetCriteriaScopeId)) {
+      const coveoFlowDetection = !(targetSupport && targetCriteriaScopeId);
+      if (headingElementNode) {
+        headerContainer.innerHTML = '';
+        headerContainer.appendChild(headingElementNode);
+      }
+      if (coveoFlowDetection) {
         headerContainer.innerHTML = headingElement.innerHTML;
         descriptionContainer.innerHTML = descriptionElement.innerHTML;
         setCoveoCountAsBlockAttribute();
         block.style.display = 'block';
       }
-      if (isFeatureEnabled('browsecardv2')) {
-        calculateNumberOfCardsToRender(block);
-      }
+
+      calculateNumberOfCardsToRender(block);
 
       const sortByContent = sortEl?.innerText?.trim();
 
@@ -604,7 +635,7 @@ export default async function decorate(block) {
           if (!data[index + DEFAULT_NUM_CARDS] && !block.dataset.browseCardRows) {
             const btn = block.querySelector('.recommended-content-see-more-btn');
             if (btn) {
-              btn.style.display = 'none';
+              btn.classList.add('hide');
             }
           }
           if (!data[index + DEFAULT_NUM_CARDS] && block.dataset.browseCardRows) {
@@ -668,7 +699,7 @@ export default async function decorate(block) {
       ) => {
         const btn = block.querySelector('.recommended-content-see-more-btn');
         if (btn) {
-          btn.style.display = 'flex';
+          btn.classList.remove('hide');
         }
 
         let contentTypes = contentTypesEl?.map((contentTypeEL) => contentTypeEL?.innerText?.trim()).reverse() || [];
@@ -736,7 +767,13 @@ export default async function decorate(block) {
         }
         dataConfiguration[lowercaseOptionType].renderedCardIds = [];
         contentDiv.dataset.selected = lowercaseOptionType;
-        contentDiv.setAttribute('data-analytics-filter-id', lowercaseOptionType);
+        let analyticsProductName = '';
+        if ([ALL_ADOBE_OPTIONS_KEY.toLowerCase()].includes(lowercaseOptionType)) {
+          analyticsProductName = 'all adobe products';
+        } else {
+          analyticsProductName = lowercaseOptionType;
+        }
+        contentDiv.setAttribute('data-analytics-filter-id', analyticsProductName);
         const showDefaultOptions = defaultOptionsKey.some((key) => lowercaseOptionType === key.toLowerCase());
         const interest = filterOptions.find((opt) => opt.toLowerCase() === lowercaseOptionType);
         const expLevelIndex = sortedProfileInterests.findIndex((s) => s === interest);
@@ -898,9 +935,11 @@ export default async function decorate(block) {
             }
             const cardsCount = contentDiv.querySelectorAll('.browse-card').length;
             if (cardsCount !== 0) {
-              if (isFeatureEnabled('browsecardv2')) {
-                calculateNumberOfCardsOnResize(fetchDataAndRenderBlock);
-                createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock);
+              calculateNumberOfCardsOnResize(fetchDataAndRenderBlock);
+              createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock);
+              if (!isTooltipListenerAdded) {
+                hideTooltipOnScroll(contentDiv);
+                isTooltipListenerAdded = true;
               }
             }
             if (cardsCount === 0) {
@@ -910,6 +949,22 @@ export default async function decorate(block) {
               buildNoResultsContent(contentDiv, false);
               buildNoResultsContent(contentDiv, true);
               recommendedContentNoResults(contentDiv);
+
+              if (!targetSupport) {
+                if (!block.dataset.browseCardRows) {
+                  if (btn) btn.classList.add('hide');
+                }
+
+                if (block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn.firstElementChild.innerHTML =
+                      placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+                  }
+                  block.dataset.allRowsLoaded = true;
+                  block.dataset.maxRows = block.dataset.browseCardRows;
+                }
+              }
+
               return;
             }
 
@@ -923,6 +978,25 @@ export default async function decorate(block) {
               const classOp =
                 contentDiv?.scrollWidth && contentDiv.scrollWidth <= contentDiv.offsetWidth ? 'add' : 'remove';
               navSectionEl.classList[classOp]('recommended-content-hidden');
+            }
+
+            if (!targetSupport) {
+              if (contentDiv.querySelectorAll('.browse-card').length < DEFAULT_NUM_CARDS) {
+                if (!block.dataset.browseCardRows) {
+                  if (btn) btn.classList.add('hide');
+                }
+
+                if (block.dataset.browseCardRows) {
+                  if (btn) {
+                    btn.firstElementChild.innerHTML =
+                      placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
+                  }
+                  block.dataset.allRowsLoaded = true;
+                  block.dataset.maxRows = block.dataset.browseCardRows;
+                }
+              } else if (btn) {
+                btn.classList.remove('hide');
+              }
             }
           })
           .catch((err) => {
@@ -952,6 +1026,13 @@ export default async function decorate(block) {
 
       const defaultOption = defaultFilterOption ? convertToTitleCase(defaultFilterOption) : null;
 
+      function renderButtonPlaceholder() {
+        const btn = block.querySelector('.recommended-content-see-more-btn > button');
+        if (btn) {
+          btn.innerHTML = placeholders?.recommendedContentSeeMoreButtonText || 'See more Recommendations';
+        }
+      }
+
       // eslint-disable-next-line no-new
       new ResponsiveList({
         wrapper: blockHeader,
@@ -959,6 +1040,7 @@ export default async function decorate(block) {
         defaultSelected: defaultOption,
         onInitCallback: () => {
           /* Reused the existing method */
+          renderButtonPlaceholder();
           renderCardBlock(block);
           fetchDataAndRenderBlock(defaultOption);
           if (containsAllAdobeProductsTab && defaultOption !== ALL_ADOBE_OPTIONS_KEY) {
@@ -970,6 +1052,7 @@ export default async function decorate(block) {
         onSelectCallback: (selectedItem) => {
           /* Reused the existing method */
           if (selectedItem) {
+            renderButtonPlaceholder();
             fetchDataAndRenderBlock(selectedItem, { renderCards: true, createRow: false, clearSeeMoreRows: true });
           }
         },
@@ -980,14 +1063,29 @@ export default async function decorate(block) {
   targetEventEmitter.on('dataChange', async (data) => {
     const blockId = block.id;
     const { blockId: targetBlockId, scope } = data.value;
-    if (targetBlockId === blockId) {
+    if (targetBlockId === blockId && !showOnlyCoveo) {
       renderBlock({ targetSupport: true, targetCriteriaScopeId: scope });
     }
   });
 
-  defaultAdobeTargetClient.checkTargetSupport().then(async (targetSupport) => {
-    if (targetCriteriaId || !targetSupport) {
-      renderBlock({ targetSupport, targetCriteriaScopeId: targetCriteriaId });
-    }
+  function handleTargetSupportAndRender(targetScopeId = '') {
+    defaultAdobeTargetClient.checkTargetSupport().then(async (targetSupport) => {
+      if (!targetSupport) {
+        renderBlock({ targetSupport: false, targetCriteriaScopeId: '' });
+      } else if (targetScopeId) {
+        renderBlock({ targetSupport, targetCriteriaScopeId: targetScopeId });
+      }
+    });
+  }
+
+  signupDialogEventEmitter.on('signupDialogClose', () => {
+    profileDataPromise = defaultProfileClient.getMergedProfile();
+    handleTargetSupportAndRender(block.dataset.targetScope);
   });
+
+  if (showOnlyCoveo) {
+    renderBlock({ targetSupport: false, targetCriteriaScopeId: '' });
+  } else {
+    handleTargetSupportAndRender(targetCriteriaId);
+  }
 }

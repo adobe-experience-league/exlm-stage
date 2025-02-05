@@ -1,19 +1,15 @@
 import { buildBlock, decorateBlock, decorateSections, loadBlock, updateSectionsStatus } from '../lib-franklin.js';
 import getCookie from '../utils/cookie-utils.js';
 import getEmitter from '../events.js';
-import isFeatureEnabled from '../utils/feature-flag-utils.js';
 
 const targetEventEmitter = getEmitter('loadTargetBlocks');
 class AdobeTargetClient {
   constructor() {
     this.targetDataEventName = 'target-recs-ready';
     this.cookieConsentName = 'OptanonConsent';
-    if (isFeatureEnabled('browsecardv2')) {
-      this.recommendationMarqueeScopeName = 'exl-hp-auth-recs-1';
-    }
+    this.recommendationMarqueeScopeName = 'exl-hp-auth-recs-1';
     this.targetCookieEnabled = this.checkIsTargetCookieEnabled();
-    const main = document.querySelector('main');
-    this.blocks = main.querySelectorAll('.recommended-content, .recently-reviewed, .recommendation-marquee');
+    this.blocks = [];
     this.targetArray = [];
     this.currentItem = null;
   }
@@ -101,12 +97,7 @@ class AdobeTargetClient {
         if (!window?.exlm?.targetData) window.exlm.targetData = [];
         if (!window?.exlm?.recommendationMarqueeTargetData) window.exlm.recommendationMarqueeTargetData = [];
         if (!window?.exlm?.targetData.filter((data) => data?.meta?.scope === event?.detail?.meta?.scope).length) {
-          // TODO - remove dependecy on feature flag once browse card v2 theme is live
-          if (isFeatureEnabled('browsecardv2') && event?.detail?.meta?.scope === this.recommendationMarqueeScopeName) {
-            window.exlm.recommendationMarqueeTargetData.push(event.detail);
-          } else {
-            window.exlm.targetData.push(event.detail);
-          }
+          window.exlm.targetData.push(event.detail);
         }
         resolve(true);
       };
@@ -126,9 +117,7 @@ class AdobeTargetClient {
   getTargetData(criteria) {
     return new Promise((resolve) => {
       if (!criteria) {
-        const data = window.exlm?.targetData?.length
-          ? window.exlm.targetData
-          : window.exlm?.recommendationMarqueeTargetData;
+        const data = window.exlm?.targetData;
         resolve(data);
       } else if (criteria === this.recommendationMarqueeScopeName) {
         const [data] = window.exlm.recommendationMarqueeTargetData || [];
@@ -142,11 +131,48 @@ class AdobeTargetClient {
     });
   }
 
+  sanitizeTargetData() {
+    if (!window?.exlm?.targetData?.length) {
+      return;
+    }
+
+    window.exlm.targetData = window.exlm.targetData
+      .sort((data1, data2) => {
+        const numA = parseInt(data1?.meta?.scope.match(/\d+$/)[0], 10);
+        const numB = parseInt(data2?.meta?.scope.match(/\d+$/)[0], 10);
+        return numA - numB;
+      })
+      .map((data, i) => {
+        data.meta.scope = data.meta.scope.replace(/\d+$/, i + 1);
+        return data;
+      });
+
+    const possibleMarqueeData = window.exlm.targetData[0];
+
+    if (!possibleMarqueeData) {
+      return;
+    }
+
+    this.recommendationMarqueeScopeName = possibleMarqueeData.meta.scope;
+
+    const marqueeIndex = window.exlm.targetData.findIndex(
+      (data) => data.meta.scope === this.recommendationMarqueeScopeName,
+    );
+
+    window.exlm.targetData.splice(marqueeIndex, 1);
+    window.exlm.recommendationMarqueeTargetData.push(possibleMarqueeData);
+  }
+
   /**
    * Fetches target data and maps it to the appropriate DOM components for processing.
    * It determines whether to update, replace, or add new blocks to the DOM.
    */
   async mapComponentsToTarget() {
+    const main = document.querySelector('main');
+    this.blocks = main.querySelectorAll(
+      '.recommended-content:not(.recommended-content.coveo-only), .recently-reviewed, .recommendation-marquee:not(.recommendation-marquee.coveo-only)',
+    );
+    this.sanitizeTargetData();
     const targetData = await this.getTargetData();
     const marqueeTargetData = await this.getTargetData(this.recommendationMarqueeScopeName);
     let blockRevisionNeeded = false;
@@ -264,7 +290,15 @@ class AdobeTargetClient {
     } else {
       const containerSection = document.createElement('div');
       containerSection.classList.add('section', 'profile-section');
-      main.appendChild(containerSection);
+      const profileRailSection = main.querySelector('.profile-rail-section');
+      const profileBottomSections = main.querySelectorAll('.profile-bottom-section');
+      if (profileBottomSections.length) {
+        main.insertBefore(containerSection, profileBottomSections[0]);
+      } else if (profileRailSection) {
+        main.insertBefore(containerSection, profileRailSection);
+      } else {
+        main.appendChild(containerSection);
+      }
       decorateSections(main);
       containerSection.appendChild(blockEl);
     }

@@ -1,11 +1,10 @@
 import { decorateIcons, loadCSS } from '../lib-franklin.js';
 import { createTag, htmlToElement, fetchLanguagePlaceholders, getPathDetails } from '../scripts.js';
 import { createTooltip } from './browse-card-tooltip.js';
-import { AUTHOR_TYPE, RECOMMENDED_COURSES_CONSTANTS } from './browse-cards-constants.js';
+import { AUTHOR_TYPE, RECOMMENDED_COURSES_CONSTANTS, VIDEO_THUMBNAIL_FORMAT } from './browse-cards-constants.js';
 import { sendCoveoClickEvent } from '../coveo-analytics.js';
 import UserActions from '../user-actions/user-actions.js';
 import { CONTENT_TYPES } from '../data-service/coveo/coveo-exl-pipeline-constants.js';
-import isFeatureEnabled from '../utils/feature-flag-utils.js';
 
 const bookmarkExclusionContentypes = [
   CONTENT_TYPES.LIVE_EVENT.MAPPING_KEY,
@@ -108,13 +107,17 @@ const buildTagsContent = (cardMeta, tags = []) => {
   });
 };
 
-const buildEventContent = ({ event, cardContent, card }) => {
-  const { time } = event;
+const buildEventContent = ({ event, contentType, cardContent, card }) => {
+  const { time, date } = event;
   const eventInfo = htmlToElement(`
     <div class="browse-card-event-info">
         <span class="icon icon-time"></span>
         <div class="browse-card-event-time">
-            <h6>${formatDate(time)}</h6>
+        ${
+          contentType === CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY
+            ? `<h6>${date} | ${time}</h6>`
+            : `<h6>${formatDate(time)}</h6>`
+        }
         </div>
     </div>
   `);
@@ -193,7 +196,7 @@ const buildCardContent = async (card, model) => {
     inProgressText,
     inProgressStatus = {},
     failedToLoad = false,
-    truncateDescription = true,
+    truncateDescription = false,
   } = model;
   const contentType = type?.toLowerCase();
   const cardContent = card.querySelector('.browse-card-content');
@@ -227,8 +230,11 @@ const buildCardContent = async (card, model) => {
 
   cardContent.appendChild(cardMeta);
 
-  if (contentType === CONTENT_TYPES.LIVE_EVENT.MAPPING_KEY) {
-    buildEventContent({ event, cardContent, card });
+  if (
+    contentType === CONTENT_TYPES.LIVE_EVENT.MAPPING_KEY ||
+    contentType === CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY
+  ) {
+    buildEventContent({ event, contentType, cardContent, card });
   }
 
   if (contentType === CONTENT_TYPES.PERSPECTIVE.MAPPING_KEY) {
@@ -316,8 +322,6 @@ export async function buildCard(container, element, model) {
   model.copyLink = model.copyLink?.toLowerCase();
 
   let type = contentType?.toLowerCase();
-  const courseMappingKey = CONTENT_TYPES.PLAYLIST.MAPPING_KEY.toLowerCase();
-  const tutorialMappingKey = CONTENT_TYPES.TUTORIAL.MAPPING_KEY.toLowerCase();
   const inProgressMappingKey = RECOMMENDED_COURSES_CONSTANTS.IN_PROGRESS.MAPPING_KEY.toLowerCase();
   const recommededMappingKey = RECOMMENDED_COURSES_CONSTANTS.RECOMMENDED.MAPPING_KEY.toLowerCase();
   if (contentType === inProgressMappingKey || contentType === recommededMappingKey) {
@@ -337,28 +341,13 @@ export async function buildCard(container, element, model) {
   const cardFigure = card.querySelector('.browse-card-figure');
   const cardContent = card.querySelector('.browse-card-content');
 
-  if (type) {
-    cardFigure.style.backgroundColor = `var(--browse-card-color-${type}-secondary)`;
-  }
-
-  if (
-    (type === courseMappingKey ||
-      type === tutorialMappingKey ||
-      type === inProgressMappingKey ||
-      type === recommededMappingKey) &&
-    thumbnail
-  ) {
+  if (thumbnail) {
     const laptopContainer = document.createElement('div');
     laptopContainer.classList.add('laptop-container');
     const laptopScreen = document.createElement('div');
     const laptopKeyboard = document.createElement('div');
     laptopContainer.append(laptopScreen, laptopKeyboard);
-    if (type) {
-      laptopScreen.style.backgroundColor = `var(--browse-card-color-${type}-primary)`;
-      laptopKeyboard.style.backgroundColor = `var(--browse-card-color-${type}-primary)`;
-    }
 
-    cardFigure.appendChild(laptopContainer);
     const img = document.createElement('img');
     img.src = thumbnail;
     img.loading = 'lazy';
@@ -369,18 +358,31 @@ export async function buildCard(container, element, model) {
     img.addEventListener('error', () => {
       img.style.display = 'none';
       laptopContainer.style.display = 'none';
+      card.classList.add('thumbnail-not-loaded');
     });
     img.addEventListener('load', () => {
       cardFigure.classList.add('img-custom-height');
+      card.classList.add('thumbnail-loaded');
+      cardFigure.appendChild(laptopContainer);
+      if (
+        VIDEO_THUMBNAIL_FORMAT.test(thumbnail) ||
+        type === CONTENT_TYPES.PLAYLIST.MAPPING_KEY ||
+        type === CONTENT_TYPES.TUTORIAL.MAPPING_KEY
+      ) {
+        const playButton = document.createElement('div');
+        playButton.classList.add('play-button');
+        playButton.innerHTML = '<span class="icon icon-play-outline-white"></span>';
+        cardFigure.appendChild(playButton);
+        decorateIcons(playButton);
+      }
     });
+  } else {
+    card.classList.add('thumbnail-not-loaded');
   }
   if (badgeTitle || failedToLoad) {
     const bannerElement = createTag('h3', { class: 'browse-card-banner' });
     bannerElement.innerText = badgeTitle || '';
-    // TODO - remove dependecy on feature flag once browse card v2 theme is live
-    if (isFeatureEnabled('browsecardv2')) {
-      bannerElement.style.backgroundColor = `var(--browse-card-color-${type}-primary)`;
-    }
+    bannerElement.style.backgroundColor = `var(--browse-card-color-${type}-primary)`;
     cardFigure.appendChild(bannerElement);
   }
 
@@ -416,12 +418,7 @@ export async function buildCard(container, element, model) {
     titleElement.innerHTML = title;
     cardContent.appendChild(titleElement);
   }
-  // TODO - remove dependecy on feature flag once browse card v2 theme is live
-  if (isFeatureEnabled('browsecardv2')) {
-    await loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card-v2.css`);
-  } else {
-    await loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card.css`);
-  }
+  await loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card.css`);
   await buildCardContent(card, model);
   if (model.viewLink) {
     const cardContainer = document.createElement('a');

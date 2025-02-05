@@ -15,25 +15,36 @@ function decorateButtons(...buttons) {
     .join('');
 }
 
-// Function to hide a  ribbon and update session storage
-function hideRibbon(block) {
-  block.style.display = 'none';
-  sessionStorage.setItem(`hideRibbonBlock`, 'true');
+// Function to remove previously added keys from the browser storage
+function removeStorageKeys() {
+  const browserStorage = ['localStorage', 'sessionStorage'];
+  browserStorage.forEach((storage) => {
+    window[storage].removeItem('hideRibbonBlock');
+  });
 }
 
-// Function to check session storage and hide the ribbon if it was previously closed
-function isRibbonHidden() {
-  return sessionStorage.getItem('hideRibbonBlock') === 'true';
+// Function to hide a ribbon and update the key in the browser storage
+function hideRibbon(block, storage = 'sessionStorage') {
+  block.style.display = 'none';
+  removeStorageKeys();
+  window[storage].setItem('hideRibbonBlock', 'true');
+}
+
+// Function to check browser storage and hide the ribbon if it was previously closed
+function isRibbonHidden(storage = 'sessionStorage') {
+  return window[storage].getItem('hideRibbonBlock') === 'true';
 }
 
 export default async function decorate(block) {
-  if (isRibbonHidden()) {
+  const [image, heading, description, bgColor, hexcode, firstCta, secondCta, storage] = [...block.children].map(
+    (row) => row.firstElementChild,
+  );
+  // The `storage` value will be either 'localStorage' or 'sessionStorage',
+  // as defined in the `components-models.json` file.
+  if (isRibbonHidden(storage?.textContent)) {
     block.style.display = 'none';
     return;
   }
-  const [image, heading, description, bgColor, hexcode, firstCta, secondCta] = [...block.children].map(
-    (row) => row.firstElementChild,
-  );
 
   heading?.classList.add('ribbon-heading');
   description?.classList.add('ribbon-description');
@@ -83,7 +94,7 @@ export default async function decorate(block) {
   ['.icon-close-black', '.icon-close-light'].forEach((selectedIcon) => {
     const closeIcon = block.querySelector(selectedIcon);
     if (closeIcon && !window.location.href.includes('.html')) {
-      closeIcon.addEventListener('click', () => hideRibbon(block));
+      closeIcon.addEventListener('click', () => hideRibbon(block, storage?.textContent));
     }
   });
 }
