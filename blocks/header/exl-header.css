@@ -1,3 +1,5 @@
+/* stylelint-enforce-no-external-css-vars - this is used in header when included externally, it has to be all-inclusive, including variables */
+
 @charset "UTF-8";
 /* stylelint-disable  color-hex-length */
 :host {
@@ -43,6 +45,10 @@
   --non-spectrum-article-dark-gray: #6a6a6a;
   --non-spectrum-silver-mist: #d1d1d1;
   --non-spectrum-grey-updated: #8e8e8e;
+  --non-spectrum-silver: #f5f5f5;
+  --non-spectrum-grey: #4a4a4a;
+  --non-spectrum-charcoal-gray: #505050;
+  --non-spectrum-azure-blue: #378ef0;
   --background-color: #fff;
   --link-color: #0066cc;
   --link-hover-color: #0055b3;
@@ -51,6 +57,16 @@
   --font-weight-normal: 400;
   --font-weight-semi-bold: 600;
   --font-weight-bold: 700;
+  --font-weight-thin: 100;
+  --font-weight-light: 300;
+  --non-spectrum-graphite-gray: #4b4b4b;
+  --text-color: #000;
+  --spectrum-font-size-50: 11px;
+  --spectrum-font-size-75: 12px;
+  --spectrum-font-size-100: 14px;
+  --spectrum-font-size-200: 16px;
+  --spectrum-font-size-400: 20px;
+  --exlm-line-height-h6: 23.4px;
 
   /* fonts */
   --body-font-family: 'Adobe Clean', adobe-clean, 'Source Sans Pro', -apple-system, system-ui, 'Segoe UI', roboto,
@@ -590,11 +606,16 @@ button:focus {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--nav-root-item-padding);
   order: var(--brand-order);
   font-size: var(--spectrum-font-size-200);
   font-weight: var(--font-weight-bold);
   white-space: nowrap;
+}
+
+@media (min-width: 1024px) {
+  .header .brand {
+    padding: var(--nav-root-item-padding);
+  }
 }
 
 .header .brand a {
@@ -657,6 +678,10 @@ button:focus {
 
 .header .signed-in .profile .profile-menu h2:first-child {
   margin: 0;
+}
+
+.header .signed-in .profile .profile-menu .profile-menu-section {
+  width: 100%;
 }
 
 .header .signed-in .profile .icon-profile {
@@ -1408,4 +1433,18 @@ profile-block {
   .header .nav-item .nav-item a {
     padding: 5px var(--nav-item-padding-x);
   }
+}
+
+@keyframes shimmer {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+[profile-placeholder] {
+  width: min-content;
+  background-image: linear-gradient(90deg, #ececec 0, #f4f4f4 40px, #ececec 80px);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  display: inline-block;
 }

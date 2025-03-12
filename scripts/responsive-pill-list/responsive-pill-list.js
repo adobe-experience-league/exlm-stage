@@ -1,8 +1,9 @@
 import { fetchLanguagePlaceholders, getPathDetails, htmlToElement } from '../scripts.js';
-import { loadCSS } from '../lib-franklin.js';
+import { decorateIcons, loadCSS } from '../lib-franklin.js';
 import Dropdown, { DROPDOWN_VARIANTS } from '../dropdown/dropdown.js';
 
 const CARDS_MAX_WIDTH = 645;
+const PILLS_OFFSET_DELTA = 44;
 
 export default class ResponsivePillList {
   /**
@@ -21,6 +22,7 @@ export default class ResponsivePillList {
     this.onInitCallback = onInitCallback;
     this.onSelectCallback = onSelectCallback;
     this.isSelectedFromUser = false;
+    this.scrollMaxReached = false;
     this.initialize();
     this.main = document.querySelector('main');
   }
@@ -93,27 +95,32 @@ export default class ResponsivePillList {
     });
     tempWrapper.appendChild(tempUl);
     tempWrapper.style.visibility = 'hidden';
+    const maxWidth = this.wrapper.parentElement.offsetWidth || CARDS_MAX_WIDTH;
     main.appendChild(tempWrapper);
     const wrapperWidth = tempWrapper.getBoundingClientRect().width;
     const listWidth = tempUl.getBoundingClientRect().width;
     const listItems = tempUl.querySelectorAll('li');
     const gapValueInPx = getComputedStyle(tempUl).gap;
     const gapValue = gapValueInPx ? parseInt(gapValueInPx, 10) : 0;
-    const { items } = Array.from(listItems).reduce(
+
+    const { items, fitWidth } = Array.from(listItems).reduce(
       (acc, curr) => {
         const itemWidth = curr.getBoundingClientRect().width;
         acc.width += itemWidth + gapValue;
-        if (acc.width <= wrapperWidth && acc.width <= CARDS_MAX_WIDTH) {
+        if (acc.width <= wrapperWidth && acc.width <= maxWidth) {
+          acc.fitWidth = acc.width;
           acc.items.push(curr.innerHTML);
         }
         return acc;
       },
-      { width: 0, items: [] },
+      { width: 0, items: [], fitWidth: 0 },
     );
     const widthInfo = {
       wrapperWidth,
       listWidth,
       fitItems: items,
+      fitWidth,
+      maxWidth,
     };
     main.removeChild(tempWrapper);
     return widthInfo;
@@ -157,11 +164,13 @@ export default class ResponsivePillList {
           </div>
           <div class="responsive-pill-list-option-overlay">
             <p>${moreProductsLabel}</p>
-            <ul class="responsive-pill-list-items-wrapper"></ul>
+            <div class="responsive-pill-list-items-wrapper">
+              <ul></ul>
+            </div>
           <div>
         </li>`);
 
-    const wrapperEl = moreItemsWrapper.querySelector('.responsive-pill-list-items-wrapper');
+    const wrapperEl = moreItemsWrapper.querySelector('.responsive-pill-list-items-wrapper ul');
     const moreOptionsButton = moreItemsWrapper.querySelector('.responsive-pill-list-more-option');
     const moreOptionsOverlay = moreItemsWrapper.querySelector('.responsive-pill-list-option-overlay');
 
@@ -203,32 +212,106 @@ export default class ResponsivePillList {
   /**
    * Renders the tabbed layout based on the provided items.
    */
-  renderTabbedLayout(fitItems = []) {
+  renderTabbedLayout() {
+    const { maxWidth } = this.evaluateWidth();
     const tabWrapper = document.createElement('div');
     tabWrapper.classList.add('responsive-pill-list');
-    const fitItemsCount = fitItems.length;
+    const delta = 4;
+    tabWrapper.style.maxWidth = `${maxWidth - delta}px`;
     const tabList = document.createElement('ul');
-    const overlayItems = [];
-    this.items.forEach((item, index) => {
-      if (!fitItemsCount || (fitItemsCount && index < fitItemsCount)) {
-        const tabItem = this.prepareTabItemStructure(item);
-        tabList.appendChild(tabItem);
-      } else {
-        overlayItems.push(item);
-      }
+    this.scrollSteps = [];
+    this.items.forEach((item) => {
+      const tabItem = this.prepareTabItemStructure(item);
+      tabList.appendChild(tabItem);
     });
 
-    if (overlayItems.length) {
-      this.renderMoreOptionsOverlay(overlayItems, tabList);
-    }
-
+    const leftButton = htmlToElement(`
+      <button class="response-pill-list-nav-btn responsive-pill-list-left-nav">
+        <span class="icon icon-chevron"></span>
+      </button>`);
+    const rightButton = htmlToElement(`
+      <button class="response-pill-list-nav-btn responsive-pill-list-right-nav">
+        <span class="icon icon-chevron"></span>
+      </button>`);
+    tabWrapper.appendChild(leftButton);
     tabWrapper.appendChild(tabList);
+    tabWrapper.appendChild(rightButton);
     this.wrapper.appendChild(tabWrapper);
+    leftButton.addEventListener('click', () => {
+      this.navigatePills(false);
+    });
+    rightButton.addEventListener('click', () => {
+      this.navigatePills(true);
+    });
+    this.handleNavButtonVisiblity();
 
     if (this.selectedItem) {
       const defaultTabItem = tabList.querySelector(`[data-tab-id="${this.selectedItem}"]`);
       if (defaultTabItem) {
         this.selectTab(defaultTabItem);
+      }
+    }
+    decorateIcons(this.wrapper);
+  }
+
+  navigatePills(forward) {
+    this.scrollMaxReached = false;
+    const wrapperEl = this.wrapper.querySelector('ul');
+    if (forward) {
+      const elements = Array.from(wrapperEl.children);
+      const currentOffset = wrapperEl.scrollLeft;
+      const edgeValue = wrapperEl.offsetLeft + wrapperEl.offsetWidth;
+      const targetElement = elements.reduce((acc, curr) => {
+        if (!acc) {
+          return curr;
+        }
+        const startEdge = curr.offsetLeft - currentOffset;
+        const elementEdge = curr.offsetLeft + curr.offsetWidth - currentOffset;
+        const accEdge = acc.offsetLeft + acc.offsetWidth - currentOffset;
+        if (elementEdge > accEdge && startEdge <= edgeValue && accEdge <= edgeValue) {
+          return curr;
+        }
+        return acc;
+      }, null);
+      const targetScrollLeft = targetElement.offsetLeft;
+      this.scrollMaxReached = wrapperEl.offsetWidth + targetScrollLeft >= wrapperEl.scrollWidth;
+      wrapperEl.scrollLeft = targetScrollLeft;
+      if (wrapperEl.scrollLeft !== currentOffset) {
+        this.scrollSteps.push(currentOffset);
+      }
+    } else {
+      const currentScrollValue = wrapperEl.scrollLeft;
+      let scrollValue = this.scrollSteps.pop();
+      if (scrollValue === currentScrollValue && this.scrollSteps.length) {
+        scrollValue = this.scrollSteps.pop();
+      }
+      wrapperEl.scrollLeft = scrollValue;
+    }
+    this.handleNavButtonVisiblity();
+  }
+
+  handleNavButtonVisiblity() {
+    const wrapperEl = this.wrapper.querySelector('ul');
+    const { scrollLeft } = wrapperEl;
+    const elements = Array.from(wrapperEl.children);
+    const [firstElementChild] = elements;
+    const lastElementChild = elements[elements.length - 1];
+    const [leftButton, rightButton] = this.wrapper.querySelectorAll('.response-pill-list-nav-btn');
+    if (leftButton) {
+      if (scrollLeft > firstElementChild.offsetLeft) {
+        leftButton.classList.add('responsive-pill-list-nav-visible');
+      } else {
+        leftButton.classList.remove('responsive-pill-list-nav-visible');
+      }
+    }
+    if (rightButton) {
+      if (
+        lastElementChild.offsetLeft - scrollLeft < wrapperEl.offsetWidth - PILLS_OFFSET_DELTA ||
+        this.scrollMaxReached
+      ) {
+        rightButton.classList.remove('responsive-pill-list-nav-visible');
+      } else {
+        rightButton.classList.add('responsive-pill-list-nav-visible');
       }
     }
   }
@@ -257,10 +340,9 @@ export default class ResponsivePillList {
     const isDesktop = window.matchMedia('(min-width:1024px)').matches;
     this.wrapper.textContent = '';
     if (isDesktop) {
-      const { fitItems } = this.evaluateWidth();
-      this.renderTabbedLayout(fitItems);
+      this.renderTabbedLayout();
     } else {
-      this.items = this.items.sort((a, b) => a.value - b.value);
+      this.items = this.items.toSorted((a, b) => a.value - b.value);
       this.renderDropdown();
     }
   }

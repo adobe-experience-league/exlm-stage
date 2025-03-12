@@ -1,6 +1,10 @@
 .profile-rail {
   position: relative;
-  z-index: 5;
+  z-index: 9;
+}
+
+.profile-rail .profile-rail-links.jump-to-list {
+  display: none;
 }
 
 .profile-rail .profile-rail-heading {
@@ -68,7 +72,7 @@
   position: absolute;
   width: 100%;
   background-color: var(--non-spectrum-grey-100);
-  z-index: 5;
+  z-index: 9;
   box-sizing: border-box;
   padding: 12px;
   border-radius: 4px;
@@ -86,9 +90,20 @@
     margin-left: 16px;
   }
 
+  .profile-rail .profile-rail-links.jump-to-list {
+    display: block;
+  }
+
+  .profile-rail .profile-rail-heading.hidden,
+  .profile-rail .profile-rail-links.hidden {
+    display: none;
+  }
+
   .profile-rail > div:first-child {
     margin-left: auto;
     max-width: 212px;
+    max-height: 100vh;
+    overflow-y: auto;
   }
 
   .profile-rail .profile-rail-heading {
@@ -111,11 +126,20 @@
 
   .profile-rail .profile-rail-links li {
     margin: 8px 0;
+    display: flex;
+
+    /** To remove the visual rendering of inline non-breaking space (`&nbsp;`) characters that appear between child elements */
+    font-size: 0;
+  }
+
+  .profile-rail .profile-rail-links:last-child li:last-child {
+    margin-bottom: 20px;
   }
 
   .profile-rail .profile-rail-links li > a {
     display: flex;
     padding: 5px 12px;
+    flex: 1;
   }
 
   .profile-rail .profile-rail-links li > a.active {

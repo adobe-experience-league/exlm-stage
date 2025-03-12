@@ -1,10 +1,11 @@
 import BrowseCardsDelegate from '../../scripts/browse-card/browse-cards-delegate.js';
-import { fetchLanguagePlaceholders, htmlToElement, getConfig } from '../../scripts/scripts.js';
+import { fetchLanguagePlaceholders, htmlToElement, getConfig, loadFragment } from '../../scripts/scripts.js';
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import { CONTENT_TYPES } from '../../scripts/data-service/coveo/coveo-exl-pipeline-constants.js';
 import Dropdown from '../../scripts/dropdown/dropdown.js';
 import { decorateIcons } from '../../scripts/lib-franklin.js';
+import { defaultProfileClient, isSignedInUser } from '../../scripts/auth/profile.js';
 
 /**
  * Retrieves a list of unique product focus items from live events data.
@@ -23,8 +24,17 @@ async function getListofProducts() {
 
     const events = data?.eventList?.events || [];
 
+    const currentDate = new Date();
+
+    // Filter events within their own show window
+    const filteredEvents = events.filter((event) => {
+      const eventStartTime = new Date(event.startTime);
+      const eventEndTime = new Date(event.endTime);
+      return currentDate >= eventStartTime && currentDate <= eventEndTime;
+    });
+
     // Extract unique productFocus items and sort alphabetically
-    const products = Array.from(new Set(events.flatMap((event) => event.productFocus || []))).sort();
+    const products = Array.from(new Set(filteredEvents.flatMap((event) => event.productFocus || []))).sort();
 
     return products;
   } catch (error) {
@@ -35,6 +45,8 @@ async function getListofProducts() {
 }
 
 export default async function decorate(block) {
+  const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
+
   let placeholders = {};
   try {
     placeholders = await fetchLanguagePlaceholders();
@@ -43,7 +55,7 @@ export default async function decorate(block) {
     console.error('Error fetching placeholders:', err);
   }
 
-  const [headingElement, descriptionElement, filterLabelElement] = [...block.children].map(
+  const [headingElement, descriptionElement, filterLabelElement, linkElement] = [...block.children].map(
     (row) => row.firstElementChild,
   );
 
@@ -69,6 +81,16 @@ export default async function decorate(block) {
   headerDiv.appendChild(tagsContainer);
 
   block.appendChild(headerDiv);
+
+  const isSignedIn = await isSignedInUser();
+  if (UEAuthorMode || (isSignedIn && (await defaultProfileClient.getMergedProfile())?.email?.includes('@adobe.com'))) {
+    const fragmentLink = linkElement?.textContent?.trim();
+    const fragment = await loadFragment(fragmentLink);
+    if (fragment) {
+      block.appendChild(fragment);
+      block.querySelector('.fragment-container')?.classList.remove('section');
+    }
+  }
 
   const products = await getListofProducts();
   const productsList = [];
@@ -117,43 +139,38 @@ export default async function decorate(block) {
     console.error('Error loading upcoming event cards:', err);
   }
 
-  productDropdown.handleOnChange((selectedValues) => {
-    const selectedFilters = Array.isArray(selectedValues)
-      ? selectedValues.filter((item) => item.trim() !== '')
-      : selectedValues
-          .split(',')
-          .map((item) => item.trim())
-          .filter((item) => item !== '');
+  // Extract filters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlFilters = urlParams.get('filters')?.split(',') || [];
 
-    const tags = [...tagsContainer.querySelectorAll('.browse-tags')].map((tag) => tag.value);
+  const updateFiltersAndCards = (selectedFilters) => {
+    // Update URL params
+    const url = new URL(window.location);
+    if (selectedFilters.length) {
+      url.searchParams.set('filters', selectedFilters.join(','));
+    } else {
+      url.searchParams.delete('filters');
+    }
+    window.history.pushState({}, '', url.toString());
 
-    tags
-      .filter((tag) => !selectedFilters.includes(tag))
-      .forEach((tag) => {
-        [...tagsContainer.querySelectorAll('.browse-tags')].forEach((existingTag) => {
-          if (existingTag.value === tag) existingTag.remove();
+    // Update tags
+    tagsContainer.innerHTML = '';
+    selectedFilters.forEach((filter) => {
+      const tagElement = htmlToElement(`
+        <button class="browse-tags" value="${filter}">
+          <span>${placeholders?.filterProductLabel || 'Product'}: ${filter}</span>
+          <span class="icon icon-close"></span>
+        </button>
+      `);
+      tagsContainer.appendChild(tagElement);
+      decorateIcons(tagElement);
+      tagElement.addEventListener('click', () => {
+        tagElement.remove();
+        [...block.querySelectorAll('.browse-card-dropdown .custom-checkbox input')].forEach((checkbox) => {
+          if (checkbox.value === filter) checkbox.click();
         });
       });
-
-    selectedFilters
-      .filter((filter) => !tags.includes(filter))
-      .forEach((filter) => {
-        const tagElement = document.createElement('button');
-        tagElement.classList.add('browse-tags');
-        tagElement.value = filter;
-        tagElement.innerHTML = `<span>${
-          placeholders?.filterProductLabel || 'Product'
-        }: ${filter}</span><span class="icon icon-close"></span>`;
-        tagsContainer.appendChild(tagElement);
-        decorateIcons(tagElement);
-        tagElement.addEventListener('click', (event) => {
-          const { value } = event.target.closest('.browse-tags');
-          tagElement.remove();
-          [...block.querySelectorAll('.browse-card-dropdown .custom-checkbox input')].forEach((checkbox) => {
-            if (checkbox.value === value) checkbox.click();
-          });
-        });
-      });
+    });
 
     // eslint-disable-next-line no-use-before-define
     const updatedData = fetchFilteredCardData(browseCardsContent, selectedFilters);
@@ -164,6 +181,22 @@ export default async function decorate(block) {
       buildCard(contentDiv, cardDiv, cardData);
       contentDiv.appendChild(cardDiv);
     });
+  };
+
+  // Pre-select checkboxes from URL filters
+  [...block.querySelectorAll('.browse-card-dropdown .custom-checkbox input')]
+    .filter((input) => urlFilters.includes(input.value) && !input.checked)
+    .forEach((input) => input.click());
+
+  updateFiltersAndCards(urlFilters);
+
+  // Dropdown selection change handler
+  productDropdown.handleOnChange((selectedValues) => {
+    const selectedFilters = (Array.isArray(selectedValues) ? selectedValues : selectedValues.split(','))
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    updateFiltersAndCards(selectedFilters);
   });
 
   /**

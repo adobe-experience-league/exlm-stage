@@ -6,23 +6,26 @@ import {
   convertToTitleCase,
   extractCapability,
   removeProductDuplicates,
+  formatId,
 } from '../../scripts/browse-card/browse-card-utils.js';
-import { defaultProfileClient } from '../../scripts/auth/profile.js';
+import { isSignedInUser, defaultProfileClient } from '../../scripts/auth/profile.js';
 import getEmitter from '../../scripts/events.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import ResponsivePillList from '../../scripts/responsive-pill-list/responsive-pill-list.js';
 import defaultAdobeTargetClient from '../../scripts/adobe-target/adobe-target.js';
 import BrowseCardsTargetDataAdapter from '../../scripts/browse-card/browse-cards-target-data-adapter.js';
 import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
+import { setTargetDataAsBlockAttribute, setCoveoAnalyticsAttribute } from '../../scripts/utils/analytics-utils.js';
 
 const targetEventEmitter = getEmitter('loadTargetBlocks');
-const signupDialogEventEmitter = getEmitter('signupDialog');
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 const DEFAULT_NUM_CARDS = 5;
+const REMOVE_DUPLICATES_BY_EXCLUSION = false;
 let seeMoreFlag = false;
 const seeMoreConfig = {
   minWidth: 1024,
   noOfRows: 2,
+  prefetchCards: false,
 };
 
 let placeholders = {};
@@ -38,6 +41,61 @@ const countNumberAsArray = (n) => Array.from({ length: n }, (_, i) => n - i);
  * @returns {string} - A string of HTML containing the shimmer divs with inline styles for width and height.
  *
  */
+
+function generateLoadingShimmer(shimmerSizes = [[100, 30]]) {
+  return shimmerSizes
+    .map(
+      ([width, height]) =>
+        `<div class="loading-shimmer" style="--placeholder-width: ${width}%; --placeholder-height: ${height}px"></div>`,
+    )
+    .join('');
+}
+
+function ensureDataSaveConfigExists(dataConfiguration, lowercaseOptionType, ctType) {
+  if (!dataConfiguration.savedCardsResponse[lowercaseOptionType]) {
+    dataConfiguration.savedCardsResponse[lowercaseOptionType] = {};
+  }
+  if (!dataConfiguration.savedCardsResponse[lowercaseOptionType][ctType]) {
+    dataConfiguration.savedCardsResponse[lowercaseOptionType][ctType] = {
+      models: [],
+    };
+  }
+}
+
+function getSavedCardsCount(dataConfiguration, optionType) {
+  return Object.values(dataConfiguration.savedCardsResponse[optionType] || {}).reduce((acc, curr) => {
+    const availableModels = curr.models.filter((model) => !model.markedForReplacement);
+    return acc + availableModels.length;
+  }, 0);
+}
+
+function restoreSavedCardsModelState(dataConfiguration, optionType) {
+  const savedCardResponseModel = dataConfiguration.savedCardsResponse[optionType] || {};
+  const contentTypes = Object.keys(savedCardResponseModel);
+  contentTypes.forEach((contentType) => {
+    const savedCardResponse = dataConfiguration.savedCardsResponse[optionType][contentType];
+    const cardModels = savedCardResponse.models || [];
+    cardModels.forEach((cardModel) => {
+      delete cardModel.markedForReplacement;
+    });
+  });
+}
+
+function getSavedCardModel(dataConfiguration, optionType) {
+  const savedCardContentTypes = Object.keys(dataConfiguration.savedCardsResponse[optionType] || {});
+  return savedCardContentTypes.reduce((acc, curr) => {
+    if (acc) {
+      return acc;
+    }
+    const savedCardResponse = dataConfiguration.savedCardsResponse[optionType][curr];
+    const cardModels = savedCardResponse.models || [];
+    const model = cardModels.find((modelInfo) => modelInfo.markedForReplacement !== true);
+    if (model) {
+      model.markedForReplacement = true;
+    }
+    return model || acc;
+  }, null);
+}
 
 function createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock) {
   if (!block.querySelector('.recommendation-marquee-see-more-btn')) {
@@ -113,20 +171,12 @@ function createSeeMoreButton(block, contentDiv, fetchDataAndRenderBlock) {
           block.dataset.allRowsLoaded = true;
           btn.innerHTML = placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
         }
+        seeMoreConfig.prefetchCards = false;
         const optionType = block.querySelector('.browse-cards-block-content').dataset.selected;
         fetchDataAndRenderBlock(optionType, { renderCards: true, createRow: true, clearSeeMoreRows: false });
       }
     });
   }
-}
-
-function generateLoadingShimmer(shimmerSizes = [[100, 30]]) {
-  return shimmerSizes
-    .map(
-      ([width, height]) =>
-        `<div class="loading-shimmer" style="--placeholder-width: ${width}%; --placeholder-height: ${height}px"></div>`,
-    )
-    .join('');
 }
 
 /**
@@ -179,37 +229,6 @@ export function updateCopyFromTarget(data, heading, subheading, taglineCta, tagl
       taglineParentBlock?.remove();
     }
   }
-}
-
-/**
- * Sets target data as a data attribute on the given block element.
- *
- * This function checks if the provided `data` object contains a `meta` property.
- * If the `meta` property exists, it serializes the metadata as a JSON string and
- * adds it to the specified block element as a custom data attribute `data-analytics-target-meta`.
- *
- * @param {Object} data - The data returned from target.
- * @param {HTMLElement} block - The DOM element to which the meta data will be added as an attribute.
- *
- */
-export function setTargetDataAsBlockAttribute(data, block) {
-  if (data?.meta) {
-    block.setAttribute('data-analytics-target-meta', JSON.stringify(data?.meta));
-  }
-}
-
-/**
- * Adds a data-analytics-coveo-meta attribute to each recommendation-marquee block on the page.
- * Value is in the format coveo-X, where X represents the order of the block on the page.
- */
-function setCoveoCountAsBlockAttribute() {
-  const recommendedBlocks = document.querySelectorAll('.recommendation-marquee.block');
-  let coveoCount = 1;
-
-  recommendedBlocks.forEach((block) => {
-    block.setAttribute('data-analytics-coveo-meta', `coveo-${coveoCount}`);
-    coveoCount += 1;
-  });
 }
 
 async function fetchInterestData() {
@@ -277,6 +296,12 @@ const renderCardPlaceholders = (contentDiv, renderCardsFlag = true) => {
  * @param {HTMLElement} block - The block of data to process.
  */
 export default async function decorate(block) {
+  isSignedInUser().then((isUserSignedIn) => {
+    if (!isUserSignedIn && !UEAuthorMode) {
+      block.parentElement.style.display = 'none';
+    }
+  });
+
   try {
     placeholders = await fetchLanguagePlaceholders();
   } catch (err) {
@@ -300,7 +325,7 @@ export default async function decorate(block) {
   const [headingElement, descriptionElement, ...contentTypesEl] = restOfEl.reverse();
   const headingElementNode = htmlToElement(headingElement.innerHTML);
   const recommendedContentShimmer = `
-  <div class="recommendation-marquee-header">${generateLoadingShimmer([[50, 14]])}</div>
+  <div class="recommendation-marquee-header rec-block-header">${generateLoadingShimmer([[50, 14]])}</div>
   <div class="recommendation-marquee-description">${generateLoadingShimmer([[50, 10]])}</div>
 `;
   // Clearing the block's content and adding CSS class
@@ -317,7 +342,7 @@ export default async function decorate(block) {
   const descriptionContainer = block.querySelector('.recommendation-marquee-description');
 
   const targetCriteriaId = block.dataset.targetScope;
-  let profileDataPromise = defaultProfileClient.getMergedProfile();
+  const profileDataPromise = defaultProfileClient.getMergedProfile();
 
   const tempWrapper = htmlToElement(`
       <div class="recommendation-marquee-temp-wrapper">
@@ -337,10 +362,15 @@ export default async function decorate(block) {
   let contentTypesFetchMap = {};
   const cardIdsToExclude = [];
   const allMyProductsCardModels = [];
-  const dataConfiguration = {};
+  const dataConfiguration = {
+    savedCardsResponse: {},
+  };
 
   const getCardsData = (payload) =>
     new Promise((resolve) => {
+      if (payload.feature?.length) {
+        payload.feature = null;
+      }
       BrowseCardsDelegate.fetchCardData(payload)
         .then((data) => {
           const [ct] = payload.contentType || [''];
@@ -355,8 +385,24 @@ export default async function decorate(block) {
     });
 
   const renderCardsBlock = (cardModels, payloadConfig, contentDiv) => {
-    const { renderCards = true, lowercaseOptionType } = payloadConfig;
-    const promises = cardModels.map(
+    const { renderCards = true, lowercaseOptionType, targetSupport } = payloadConfig;
+    const cardModelsToRender = cardModels
+      .filter((model, index) => {
+        if (!seeMoreConfig.prefetchCards || !model || targetSupport) {
+          return model;
+        }
+        const { payload, contentType } = payloadConfig;
+        const { noOfResults } = payload;
+        const renderCount = noOfResults / 2;
+        if (index + 1 > renderCount) {
+          ensureDataSaveConfigExists(dataConfiguration, lowercaseOptionType, contentType);
+          dataConfiguration.savedCardsResponse[lowercaseOptionType][contentType].models.push(model);
+          return null;
+        }
+        return model;
+      })
+      .filter(Boolean);
+    const promises = cardModelsToRender.map(
       (cardData, i) =>
         new Promise((resolve) => {
           const cardDiv = payloadConfig.wrappers[i];
@@ -408,6 +454,10 @@ export default async function decorate(block) {
               resolve(cardModelsList);
             });
           } else {
+            if (seeMoreConfig.prefetchCards && cardData.cardPromise === null) {
+              resolve([cardData]);
+              return;
+            }
             if (renderCards) {
               cardDiv.innerHTML = '';
               if (cardData.id) {
@@ -506,8 +556,9 @@ export default async function decorate(block) {
       }
       if (coveoFlowDetection) {
         headerContainer.innerHTML = headingElement.innerHTML;
+        headerContainer.id = formatId(headingElement.innerHTML);
         descriptionContainer.innerHTML = descriptionElement.innerHTML;
-        setCoveoCountAsBlockAttribute();
+        setCoveoAnalyticsAttribute(block);
         block.style.display = 'block';
       }
 
@@ -596,7 +647,13 @@ export default async function decorate(block) {
           );
         } else {
           const { data: cards = [], contentType: ctType } = cardResponse || {};
-          const { shimmers: cardShimmers, payload: apiPayload, wrappers: cardWrappers } = apiConfigObject;
+          const {
+            shimmers: cardShimmers,
+            payload: apiPayload,
+            wrappers: cardWrappers,
+            contentDiv,
+            lowercaseOptionType,
+          } = apiConfigObject;
           const { noOfResults } = apiPayload;
           if (cards.length) {
             countNumberAsArray(noOfResults).forEach(() => {
@@ -610,6 +667,18 @@ export default async function decorate(block) {
               }
             });
           } else {
+            const cardsHaveBeenSaved = getSavedCardsCount(dataConfiguration, lowercaseOptionType) > 0;
+            if (seeMoreConfig.prefetchCards) {
+              ensureDataSaveConfigExists(dataConfiguration, lowercaseOptionType, ctType);
+              dataConfiguration.savedCardsResponse[lowercaseOptionType][ctType].models = [];
+            } else if (cardsHaveBeenSaved) {
+              // delete the shimmer and wrapper as this instance of saved card was already rendered in first row.
+              // seeMoreConfig.prefetchCards will be false for the second row.
+              cardWrappers.forEach((wrapper, index) => {
+                wrapper.remove();
+                cardShimmers[index].removeShimmer();
+              });
+            }
             // Remove contentType and make new call.
             const payloadInfo = {
               ...apiPayload,
@@ -617,11 +686,13 @@ export default async function decorate(block) {
               noOfResults: DEFAULT_NUM_CARDS,
             };
             data.push({
-              cardPromise: getCardsData(payloadInfo),
+              cardPromise: seeMoreConfig.prefetchCards || cardsHaveBeenSaved ? null : getCardsData(payloadInfo),
               shimmers: cardShimmers,
               contentType: ctType,
               wrappers: cardWrappers,
               cardsToRenderCount: noOfResults,
+              replaceCard: seeMoreConfig.prefetchCards,
+              contentDiv,
             });
           }
         }
@@ -702,6 +773,12 @@ export default async function decorate(block) {
           } else {
             firstResult = contentDivs.length * DEFAULT_NUM_CARDS;
           }
+        } else {
+          Object.keys(contentTypesFetchMap).forEach((key) => {
+            const count = contentTypesFetchMap[key];
+            contentTypesFetchMap[key] = count * 2;
+          });
+          seeMoreConfig.prefetchCards = true;
         }
         const lowercaseOptionType = optionType?.toLowerCase();
         const saveCardResponse =
@@ -753,7 +830,10 @@ export default async function decorate(block) {
           role: role?.length ? role : profileRoles,
           sortCriteria,
           noOfResults: numberOfResults,
-          aq: !showDefaultOptions && cardIdsToExclude.length ? prepareExclusionQuery(cardIdsToExclude) : undefined,
+          aq:
+            !showDefaultOptions && cardIdsToExclude.length && REMOVE_DUPLICATES_BY_EXCLUSION
+              ? prepareExclusionQuery(cardIdsToExclude)
+              : undefined,
           context: showDefaultOptions ? {} : { interests: [interest], experience: [expLevel], role: profileRoles },
         };
 
@@ -793,8 +873,9 @@ export default async function decorate(block) {
                   }
                   if (resp?.data) {
                     updateCopyFromTarget(resp, headerContainer, descriptionContainer, linkEl, resultTextEl);
+                    headerContainer.id = formatId(headerContainer.innerHTML);
                     block.style.display = 'block';
-                    setTargetDataAsBlockAttribute(resp, block);
+                    setTargetDataAsBlockAttribute(block, resp);
                   }
                   const cardModels = await parseCardResponseData(resp, payloadConfig);
                   let renderedCardModels = [];
@@ -817,6 +898,7 @@ export default async function decorate(block) {
         };
         const prepareV2CardPromise = () => {
           if (seeMoreFlag) {
+            // This block gets executed when we click on see more button.
             const payload = {
               ...params,
               contentType: [''],
@@ -824,10 +906,26 @@ export default async function decorate(block) {
             const cardShimmers = [];
             const wrappers = [];
             const { noOfResults } = payload;
-            countNumberAsArray(noOfResults).forEach(() => {
+            const savedModels = [];
+            const savedContentTypes = Object.keys(dataConfiguration.savedCardsResponse[lowercaseOptionType] || {});
+            const allSavedCardModels = savedContentTypes.reduce((acc, curr) => {
+              const models = dataConfiguration.savedCardsResponse[lowercaseOptionType][curr].models || [];
+              models.forEach((model) => {
+                if (model.markedForReplacement !== true) {
+                  acc.push(model);
+                }
+              });
+              return acc;
+            }, []);
+
+            countNumberAsArray(noOfResults).forEach((_, i) => {
               const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, args.renderCards);
               cardShimmers.push(shimmer);
               wrappers.push(wrapper);
+              const model = allSavedCardModels[i];
+              if (model) {
+                savedModels.push(model);
+              }
             });
             const payloadConfig = {
               payload,
@@ -840,7 +938,16 @@ export default async function decorate(block) {
 
             return [
               new Promise((resolve) => {
-                getCardsData(payload).then(async (resp) => {
+                let promise;
+                if (savedModels?.length) {
+                  promise = Promise.resolve({
+                    contentType: '',
+                    data: savedModels,
+                  });
+                } else {
+                  promise = getCardsData(payload);
+                }
+                promise.then(async (resp) => {
                   const cardModels = await parseCardResponseData(resp, payloadConfig);
                   let renderedCardModels = [];
                   if (cardModels?.length) {
@@ -868,9 +975,10 @@ export default async function decorate(block) {
               payload.noOfResults = contentTypesFetchMap[contentType];
             }
             const { noOfResults } = payload;
+            const shimmersCount = seeMoreConfig.prefetchCards ? noOfResults / 2 : noOfResults;
             const cardShimmers = [];
             const wrappers = [];
-            countNumberAsArray(noOfResults).forEach(() => {
+            countNumberAsArray(shimmersCount).forEach(() => {
               const { shimmer, wrapper } = renderCardPlaceholders(contentDiv, args.renderCards);
               cardShimmers.push(shimmer);
               wrappers.push(wrapper);
@@ -883,9 +991,22 @@ export default async function decorate(block) {
               wrappers,
               renderCards: args.renderCards,
               lowercaseOptionType,
+              contentDiv,
             };
             return new Promise((resolve) => {
-              getCardsData(payload).then(async (resp) => {
+              const savedCardModels = dataConfiguration.savedCardsResponse[lowercaseOptionType]?.[
+                payloadContentType
+              ]?.models?.filter((model) => model.markedForReplacement !== true);
+              let promise;
+              if (Array.isArray(savedCardModels)) {
+                promise = Promise.resolve({
+                  contentType,
+                  data: savedCardModels,
+                });
+              } else {
+                promise = getCardsData(payload);
+              }
+              promise.then(async (resp) => {
                 const cardModels = await parseCardResponseData(resp, payloadConfig);
                 let renderedCardModels = [];
                 if (cardModels?.length) {
@@ -909,8 +1030,30 @@ export default async function decorate(block) {
           ?.setAttribute('data-analytics-rec-source', targetSupport ? 'target' : 'coveo');
 
         Promise.all(cardPromises)
-          .then((finalPromiseResponse) => {
+          .then(async (finalPromiseResponse) => {
             const dontRenderCards = finalPromiseResponse.some((data) => data?.payloadConfig?.renderCards === false);
+            const cardsToBeReplaced = seeMoreConfig.prefetchCards
+              ? finalPromiseResponse.filter((response) =>
+                  response.data.some((cardData) => cardData.replaceCard === true),
+                )
+              : [];
+            if (cardsToBeReplaced.length) {
+              const cardReplacementPromises = [];
+              cardsToBeReplaced.forEach((responseInfo) => {
+                const { data = [] } = responseInfo;
+
+                data.forEach(({ shimmers, wrappers, contentDiv: contentWrapper }) => {
+                  wrappers.forEach((wrapper, index) => {
+                    const model = getSavedCardModel(dataConfiguration, lowercaseOptionType);
+                    shimmers[index].removeShimmer();
+                    if (model) {
+                      cardReplacementPromises.push(buildCard(contentWrapper, wrapper, model));
+                    }
+                  });
+                });
+              });
+              await Promise.all(cardReplacementPromises);
+            }
             if (saveCardResponse) {
               const renderedModels = finalPromiseResponse.reduce((acc, curr) => {
                 curr.renderedCardModels?.flat()?.forEach((d) => acc.push(d));
@@ -936,18 +1079,22 @@ export default async function decorate(block) {
               });
               buildNoResultsContent(contentDiv, false);
               buildNoResultsContent(contentDiv, true);
-              recommendedContentNoResults(contentDiv);
+              recommendedContentNoResults();
 
               if (!targetSupport) {
-                if (!block.dataset.browseCardRows) {
-                  if (btn) {
-                    btn?.classList.add('hide');
+                const savedCardsCount = seeMoreConfig.prefetchCards
+                  ? getSavedCardsCount(dataConfiguration, lowercaseOptionType)
+                  : 1;
+                const seeMoreBtn = block.querySelector('.recommended-content-see-more-btn');
+                if (!block.dataset.browseCardRows || savedCardsCount === 0) {
+                  if (seeMoreBtn) {
+                    seeMoreBtn.classList.add('hide');
                   }
                 }
 
                 if (block.dataset.browseCardRows) {
-                  if (btn) {
-                    btn.firstElementChild.innerHTML =
+                  if (seeMoreBtn) {
+                    seeMoreBtn.firstElementChild.innerHTML =
                       placeholders?.recommendedContentSeeLessButtonText || 'See Less Recommendations';
                   }
                   block.dataset.allRowsLoaded = true;
@@ -994,7 +1141,7 @@ export default async function decorate(block) {
             const cardsBlockCount = contentDiv.querySelectorAll('.browse-card').length;
             if (cardsBlockCount === 0) {
               buildNoResultsContent(contentDiv, true);
-              recommendedContentNoResults(contentDiv);
+              recommendedContentNoResults();
             } else {
               // In the unlikely scenario that some card promises were successfully resolved, while some others failed. Try to show the rendered cards.
               Array.from(contentDiv.querySelectorAll('.browse-card-shimmer')).forEach((element) => {
@@ -1045,6 +1192,8 @@ export default async function decorate(block) {
           /* Reused the existing method */
           if (selectedItem) {
             renderButtonPlaceholder();
+            seeMoreConfig.prefetchCards = true;
+            restoreSavedCardsModelState(dataConfiguration, selectedItem.toLowerCase());
             fetchDataAndRenderBlock(selectedItem, { renderCards: true, createRow: false, clearSeeMoreRows: true });
           }
         },
@@ -1069,11 +1218,6 @@ export default async function decorate(block) {
       }
     });
   }
-
-  signupDialogEventEmitter.on('signupDialogClose', () => {
-    profileDataPromise = defaultProfileClient.getMergedProfile();
-    handleTargetSupportAndRender(block.dataset.targetScope);
-  });
 
   if (showOnlyCoveo) {
     renderBlock({ targetSupport: false, targetCriteriaScopeId: '' });

@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-/* eslint-disable no-bitwise */
+
 import {
   buildBlock,
   loadHeader,
@@ -251,22 +251,24 @@ async function buildTabSection(main) {
  * Builds all synthetic blocks in a container element.
  * @param {Element} main The container element
  */
-function buildAutoBlocks(main) {
+function buildAutoBlocks(main, isFragment = false) {
   try {
     buildSyntheticBlocks(main);
     if (!isProfilePage && !isDocPage && !isSignUpPage) {
       buildTabSection(main);
     }
-    // if we are on a product browse page
-    if (isBrowsePage) {
-      addBrowseBreadCrumb(main);
-      addBrowseRail(main);
-    }
-    if (isPerspectivePage) {
-      addMiniToc(main);
-    }
-    if (isProfilePage) {
-      addProfileRail(main);
+    if (!isFragment) {
+      // if we are on a product browse page
+      if (isBrowsePage) {
+        addBrowseBreadCrumb(main);
+        addBrowseRail(main);
+      }
+      if (isPerspectivePage) {
+        addMiniToc(main);
+      }
+      if (isProfilePage) {
+        addProfileRail(main);
+      }
     }
   } catch (error) {
     // eslint-disable-next-line no-console
@@ -505,11 +507,52 @@ export function decorateInlineAttributes(element) {
 }
 
 /**
+ * Helper function that converts an AEM path into an EDS path.
+ */
+export function getEDSLink(aemPath) {
+  return window.hlx.aemRoot ? aemPath.replace(window.hlx.aemRoot, '').replace('.html', '') : aemPath;
+}
+
+/** Helper function that adapts the path to work on EDS and AEM rendering */
+export function getLink(edsPath) {
+  return window.hlx.aemRoot && !edsPath.startsWith(window.hlx.aemRoot) && edsPath.indexOf('.html') === -1
+    ? `${window.hlx.aemRoot}${edsPath}.html`
+    : edsPath;
+}
+
+/** @param {HTMLMapElement} main */
+async function buildPreMain(main) {
+  const { lang } = getPathDetails();
+  const fragmentUrl = getMetadata('fragment');
+
+  if (!fragmentUrl) return;
+
+  const fragmentLangUrl = fragmentUrl.startsWith('/en/') ? fragmentUrl.replace('/en/', `/${lang}/`) : fragmentUrl;
+  const fragmentPath = new URL(fragmentLangUrl, window.location).pathname;
+
+  const currentPath = window.location.pathname?.replace('.html', '');
+  if (currentPath.endsWith(fragmentPath)) {
+    return; // do not load fragment if it is the same as the current page
+  }
+
+  if (fragmentUrl) {
+    const preMain = htmlToElement(
+      `<aside><div><div class="fragment"><a href="${fragmentLangUrl}"></a></div></div></aside>`,
+    );
+    // add fragment as first section in preMain
+    main.before(preMain);
+    decorateSections(preMain);
+    decorateBlocks(preMain);
+    loadBlocks(preMain);
+  }
+}
+
+/**
  * Decorates the main element.
  * @param {Element} main The main element
  */
 // eslint-disable-next-line import/prefer-default-export
-export function decorateMain(main) {
+export function decorateMain(main, isFragment = false) {
   // docs pages do not use buttons, only links
   if (!isDocPage) {
     decorateButtons(main);
@@ -518,7 +561,7 @@ export function decorateMain(main) {
   decorateIcons(main);
   decorateInlineAttributes(main);
   decorateExternalLinks(main);
-  buildAutoBlocks(main);
+  buildAutoBlocks(main, isFragment);
   decorateSections(main);
   decorateBlocks(main);
   buildSectionBasedAutoBlocks(main);
@@ -532,6 +575,7 @@ async function loadEager(doc) {
   decorateTemplateAndTheme();
   const main = doc.querySelector('main');
   if (main) {
+    buildPreMain(main);
     decorateMain(main);
     document.body.classList.add('appear');
     await waitForLCP(LCP_BLOCKS);
@@ -741,6 +785,9 @@ export const URL_SPECIAL_CASE_LOCALES = new Map([
 ]);
 
 export async function loadIms() {
+  // if adobe IMS was loaded already, return. Especially useful when embedding this code outside this site.
+  // eg. embedding header in community which has it's own IMS setup.
+  if (!window.imsLoaded && window.adobeIMS) return Promise.resolve();
   const { ims } = getConfig();
   window.imsLoaded =
     window.imsLoaded ||
@@ -920,20 +967,6 @@ async function showSignupDialog() {
   await initSignupFlowHandler(signUpFlowConfigDate, modalReDisplayDuration);
 }
 
-/**
- * Helper function that converts an AEM path into an EDS path.
- */
-export function getEDSLink(aemPath) {
-  return window.hlx.aemRoot ? aemPath.replace(window.hlx.aemRoot, '').replace('.html', '') : aemPath;
-}
-
-/** Helper function that adapts the path to work on EDS and AEM rendering */
-export function getLink(edsPath) {
-  return window.hlx.aemRoot && !edsPath.startsWith(window.hlx.aemRoot) && edsPath.indexOf('.html') === -1
-    ? `${window.hlx.aemRoot}${edsPath}.html`
-    : edsPath;
-}
-
 /** fetch first path, if non 200, fetch the second */
 export async function fetchWithFallback(path, fallbackPath) {
   const response = await fetch(path);
@@ -998,14 +1031,20 @@ export async function getLanguageCode() {
  * @param {function} onRejected callback function to execute when the placeholder is rejected/error
  * @returns {HTMLSpanElement}
  */
-export function createPlaceholderSpan(placeholderKey, fallbackText, onResolved, onRejected) {
+export function createPlaceholderSpan(placeholderKey, fallbackText, onResolved, onRejected, lang) {
   const span = document.createElement('span');
   span.setAttribute('data-placeholder', placeholderKey);
   span.setAttribute('data-placeholder-fallback', fallbackText);
   span.style.setProperty('--placeholder-width', `${fallbackText.length}ch`);
-  fetchLanguagePlaceholders()
+  fetchLanguagePlaceholders(lang)
     .then((placeholders) => {
-      span.textContent = placeholders[placeholderKey] || fallbackText;
+      if (placeholders[placeholderKey]) {
+        span.textContent = placeholders[placeholderKey];
+        span.setAttribute('data-placeholder-resolved-key', placeholderKey);
+      } else {
+        span.textContent = fallbackText;
+        span.setAttribute('data-placeholder-resolved-fallback-text', 'fallback');
+      }
       span.removeAttribute('data-placeholder');
       span.removeAttribute('data-placeholder-fallback');
       span.style.removeProperty('--placeholder-width');
@@ -1021,11 +1060,12 @@ export function createPlaceholderSpan(placeholderKey, fallbackText, onResolved, 
 /**
  * decorates placeholder spans in a given element
  * @param {HTMLElement} element
+ * @param {string} lang
  */
-export function decoratePlaceholders(element) {
+export function decoratePlaceholders(element, lang) {
   const placeholdersEls = [...element.querySelectorAll('[data-placeholder]')];
   placeholdersEls.forEach((el) => {
-    el.replaceWith(createPlaceholderSpan(el.dataset.placeholder, el.textContent));
+    el.replaceWith(createPlaceholderSpan(el.dataset.placeholder, el.textContent, undefined, undefined, lang));
   });
 }
 
@@ -1165,6 +1205,29 @@ function handleRedirects() {
   const redirects = ['/#feedback:/home#feedback'].map((p) => p.split(':').map((s) => new URL(s, window.location.href)));
   const redirect = redirects.find(([from]) => window.location.href === from.href);
   if (redirect) window.location.href = redirect[1].href;
+}
+
+export async function loadFragment(fragmentURL) {
+  if (!fragmentURL) return null;
+
+  const fragmentLink = fragmentURL.startsWith('/content')
+    ? fragmentURL.replace(/^\/content\/[^/]+\/global/, '')
+    : fragmentURL;
+
+  const fragmentPath = new URL(fragmentLink, window.location).pathname;
+  const currentPath = window.location.pathname?.replace('.html', '');
+
+  if (currentPath.endsWith(fragmentPath)) {
+    return null;
+  }
+
+  const fragmentEl = htmlToElement(`<div><div><div class="fragment"><a href="${fragmentLink}"></a></div></div></div>`);
+
+  decorateSections(fragmentEl);
+  decorateBlocks(fragmentEl);
+  await loadBlocks(fragmentEl);
+
+  return fragmentEl;
 }
 
 async function loadPage() {
