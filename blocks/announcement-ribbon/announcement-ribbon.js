@@ -1,46 +1,123 @@
 import { decorateIcons } from '../../scripts/lib-franklin.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
+import { defaultProfileClient, isSignedInUser } from '../../scripts/auth/profile.js';
+import { MD5 } from '../../scripts/crypto.js';
 
-// Function to remove previously added keys from the browser storage
-function removeStorageKeys() {
-  const browserStorage = ['localStorage', 'sessionStorage'];
-  browserStorage.forEach((storage) => {
-    window[storage].removeItem('hideRibbonBlock');
-  });
-}
+const STORAGE_KEY = 'announcement-ribbon';
+const ribbonStore = {
+  remove: () => {
+    // Storage key name has been updated. It is a temporary condition to remove the old key.
+    if (localStorage.getItem('hide-ribbon-block')) {
+      localStorage.removeItem('hide-ribbon-block');
+    }
+    const storedEntries = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (storedEntries) {
+      const pagePath = window.location.pathname;
+      const ribbonIds = Array.from(document.querySelectorAll('.announcement-ribbon.dismissable'))
+        .map((block) => block.parentElement?.getAttribute('data-id'))
+        .filter(Boolean);
+      const newStore = storedEntries.filter((entry) => entry.pagePath !== pagePath || ribbonIds.includes(entry.id));
+      if (newStore.length === 0) {
+        localStorage.removeItem(STORAGE_KEY);
+      } else {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(newStore));
+      }
+    }
+  },
+  /**
+   * @param {string} pagePath
+   * @param {string} id
+   */
+  set: (pagePath, id) => {
+    const existingStore = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+    const updatedStore = [...existingStore, { pagePath, id }];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedStore));
+  },
+  /**
+   * Retrieves the entry matching the page path and ribbon id from the store.
+   * @param {string} pagePath
+   * @returns {{pagePath: string, id: string} | null}
+   */
+  get: (pagePath) => {
+    const storedData = localStorage.getItem(STORAGE_KEY);
+    if (storedData) {
+      const entries = JSON.parse(storedData);
+      return entries.filter((entry) => entry.pagePath === pagePath);
+    }
+    return [];
+  },
+};
 
 // Function to hide a ribbon and update the key in the browser storage
-function hideRibbon(block, storage = 'sessionStorage') {
-  block.style.display = 'none';
-  removeStorageKeys();
-  window[storage].setItem('hideRibbonBlock', 'true');
+function hideRibbon(block, pagePath, ribbonId) {
+  block.parentElement.style.display = 'none';
+  ribbonStore.set(pagePath, ribbonId, true);
 }
 
-// Function to check browser storage and hide the ribbon if it was previously closed
-function isRibbonHidden(storage = 'sessionStorage') {
-  return window[storage].getItem('hideRibbonBlock') === 'true';
+function generateHash(content) {
+  if (typeof content !== 'string') return '';
+  return MD5(content);
 }
 
-export default async function decorate(block) {
-  const [image, heading, description, bgColor, hexcode, firstCta, secondCta, storage] = [...block.children].map(
-    (row) => row.firstElementChild,
-  );
-  // The `storage` value will be either 'localStorage' or 'sessionStorage',
-  // as defined in the `components-models.json` file.
-  if (isRibbonHidden(storage?.textContent)) {
-    block.style.display = 'none';
-    return;
+function extractAnchorData(cta) {
+  const anchor = cta?.querySelector('p > a');
+  return anchor
+    ? {
+        href: anchor.getAttribute('href'),
+        text: anchor.textContent.trim(),
+      }
+    : { href: '', text: '' };
+}
+
+async function decorateRibbon({
+  block,
+  image,
+  heading,
+  description,
+  pagePath,
+  ribbonId,
+  dismissable,
+  hexcode,
+  firstCta,
+  secondCta,
+}) {
+  if (block.classList.contains('internal-banner')) {
+    const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
+    let displayBlock = false;
+
+    if (UEAuthorMode) {
+      displayBlock = true;
+    } else {
+      const isSignedIn = await isSignedInUser();
+      if (isSignedIn) {
+        try {
+          const profile = await defaultProfileClient.getMergedProfile();
+          displayBlock = profile?.email?.includes('@adobe.com');
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to fetch profile:', error);
+        }
+      }
+    }
+
+    if (!displayBlock) {
+      block.parentElement.remove();
+    }
   }
 
   heading?.classList.add('ribbon-heading');
   description?.classList.add('ribbon-description');
   let bgColorVariable;
-  if (bgColor.innerHTML.includes('bg-')) {
-    const bgSpectrumColor = bgColor.innerHTML.substr(3); // Remove 'bg-' prefix
+  const classes = block.classList;
+  const backgroundColorClass = [...classes].find((cls) => cls.startsWith('bg-'));
+  if (backgroundColorClass) {
+    const bgSpectrumColor = backgroundColorClass.substr(3); // Remove 'bg-' prefix
     bgColorVariable = `var(--${bgSpectrumColor})`; // Use the CSS variable
   } else {
     bgColorVariable = `#${hexcode.innerHTML}`; // Use the hex code directly
   }
+
+  const dismissButton = `<span class="icon icon-close-black"></span>`;
 
   const ribbonDom = document.createRange().createContextualFragment(`
   <div class="ribbon-image">
@@ -55,32 +132,77 @@ export default async function decorate(block) {
       ${decorateCustomButtons(firstCta, secondCta)}
     </div>
     </div>
-    <span class="icon icon-close-black"></span>
+    ${dismissable ? dismissButton : ''}
   `);
 
   block.textContent = '';
   block.append(ribbonDom);
   block.style.backgroundColor = bgColorVariable;
 
-  const icon = block.querySelector('.icon');
-  if (icon) {
-    if (block.classList.contains('dark')) {
-      // If dark class is present, change the icon to light
-      icon.classList.remove('icon-close-black');
-      icon.classList.add('icon-close-light');
-    } else {
-      // Otherwise default icon
-      icon.classList.remove('icon-close-light');
-      icon.classList.add('icon-close-black');
+  if (dismissable) {
+    const icon = block.querySelector('.icon');
+    if (icon) {
+      const isDark = block.classList.contains('dark');
+      icon.classList.toggle('icon-close-light', isDark);
+      icon.classList.toggle('icon-close-black', !isDark);
     }
+
+    // Add close button functionality
+    ['.icon-close-black', '.icon-close-light'].forEach((selectedIcon) => {
+      const closeIcon = block.querySelector(selectedIcon);
+      if (closeIcon && !window.location.href.includes('.html')) {
+        closeIcon.addEventListener('click', () => hideRibbon(block, pagePath, ribbonId));
+      }
+    });
   }
   decorateIcons(block);
-
-  // Add close button functionality
-  ['.icon-close-black', '.icon-close-light'].forEach((selectedIcon) => {
-    const closeIcon = block.querySelector(selectedIcon);
-    if (closeIcon && !window.location.href.includes('.html')) {
-      closeIcon.addEventListener('click', () => hideRibbon(block, storage?.textContent));
-    }
-  });
 }
+
+export default async function decorate(block) {
+  const [image, heading, description, hexcode, firstCta, secondCta] = [...block.children].map(
+    (row) => row.firstElementChild,
+  );
+  const dismissable = block.classList.contains('dismissable');
+  let pagePath = '';
+  let ribbonId = '';
+  let isDismissed = false;
+  if (dismissable) {
+    const firstCtaData = extractAnchorData(firstCta);
+    const secondCtaData = extractAnchorData(secondCta);
+    pagePath = window.location.pathname;
+    ribbonId = generateHash(
+      [heading, description, firstCtaData.text, firstCtaData.href, secondCtaData.text, secondCtaData.href]
+        .map((el) => {
+          if (typeof el === 'string') return el.trim();
+          if (el?.textContent?.trim()) return el.textContent.trim();
+          return '';
+        })
+        .filter(Boolean)
+        .join('|'),
+    );
+    if (ribbonId) {
+      block.parentElement?.setAttribute('data-id', ribbonId);
+    }
+    isDismissed = ribbonStore.get(pagePath)?.some((entry) => entry.id === ribbonId);
+  }
+  if (dismissable && isDismissed) {
+    block.parentElement.style.display = 'none';
+  } else {
+    await decorateRibbon({
+      block,
+      image,
+      heading,
+      description,
+      pagePath,
+      ribbonId,
+      dismissable,
+      hexcode,
+      firstCta,
+      secondCta,
+    });
+  }
+}
+
+window.addEventListener('delayed-load', async () => {
+  ribbonStore.remove();
+});

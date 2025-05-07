@@ -1,6 +1,5 @@
 import { decorateIcons, loadCSS } from '../lib-franklin.js';
 import { createTag, htmlToElement, fetchLanguagePlaceholders, getPathDetails } from '../scripts.js';
-import { createTooltip } from './browse-card-tooltip.js';
 import { AUTHOR_TYPE, RECOMMENDED_COURSES_CONSTANTS, VIDEO_THUMBNAIL_FORMAT } from './browse-cards-constants.js';
 import { sendCoveoClickEvent } from '../coveo-analytics.js';
 import UserActions from '../user-actions/user-actions.js';
@@ -79,7 +78,15 @@ const getBookmarkId = ({ id, viewLink, contentType }) => {
   return viewLink ? new URL(viewLink).pathname : '';
 };
 
+const getBookmarkPath = ({ id, viewLink, contentType }) => {
+  if (contentType === CONTENT_TYPES.PLAYLIST.MAPPING_KEY && id) {
+    return `/playlists/${id}`;
+  }
+  return viewLink ? new URL(viewLink).pathname : '';
+};
+
 const formatDate = (dateString) => {
+  if (!dateString) return null;
   const date = new Date(dateString);
   const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const optionsDate = { month: 'short', day: '2-digit' };
@@ -94,22 +101,35 @@ const formatDate = (dateString) => {
   const formattedTime = date.toLocaleTimeString(undefined, optionsTime);
 
   // Get timezone abbreviation
-  const timeZoneAbbr =
-    {
-      'America/Los_Angeles': 'PT',
-      'America/Denver': 'MT',
-      'America/Chicago': 'CT',
-      'America/New_York': 'ET',
-      'Pacific/Honolulu': 'HT',
-      'Australia/Sydney': 'AEST',
-      'Europe/London': 'BST',
-      'Europe/Paris': 'CET',
-      'Asia/Calcutta': 'IST',
-      'Asia/Kolkata': 'IST',
-      'Etc/GMT': 'GMT',
-    }[userTimeZone] || `UTC${(date.getTimezoneOffset() / -60 >= 0 ? '+' : '') + date.getTimezoneOffset() / -60}`;
+  const timeZoneAbbr = {
+    'America/Los_Angeles': 'PT',
+    'America/Denver': 'MT',
+    'America/Chicago': 'CT',
+    'America/New_York': 'ET',
+    'Pacific/Honolulu': 'HT',
+    'Australia/Sydney': 'AEST',
+    'Europe/London': 'BST',
+    'Europe/Paris': 'CET',
+    'Asia/Calcutta': 'IST',
+    'Asia/Kolkata': 'IST',
+    'Etc/GMT': 'GMT',
+  }[userTimeZone];
 
-  return `${formattedDate} | ${formattedTime} ${timeZoneAbbr}`;
+  let finalTimeZone = timeZoneAbbr;
+
+  if (!timeZoneAbbr) {
+    const offsetMinutes = date.getTimezoneOffset();
+    const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const offsetMins = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes <= 0 ? '+' : '-';
+
+    const paddedHours = offsetHours.toString();
+    const paddedMinutes = offsetMins.toString().padStart(2, '0');
+
+    finalTimeZone = `UTC${sign}${paddedHours}:${paddedMinutes}`;
+  }
+
+  return `${formattedDate} | ${formattedTime} ${finalTimeZone}`;
 };
 
 const buildTagsContent = (cardMeta, tags = []) => {
@@ -289,6 +309,7 @@ const buildCardContent = async (card, model) => {
   const cardAction = UserActions({
     container: cardOptions,
     id: getBookmarkId({ id, viewLink, contentType }),
+    bookmarkPath: getBookmarkPath({ id, viewLink, contentType }),
     link: copyLink,
     bookmarkConfig: !bookmarkExclusionContentypes.includes(contentType),
     copyConfig: failedToLoad ? false : undefined,
@@ -440,27 +461,35 @@ export async function buildCard(container, element, model) {
     buildInProgressBarContent({ inProgressStatus, cardFigure, card });
   }
 
-  if (product || failedToLoad) {
-    let tagElement;
-    if (product?.length > 1) {
-      tagElement = createTag(
-        'div',
-        { class: 'browse-card-tag-text' },
-        `<h4>${placeholders.multiSolutionText || 'multisolution'}</h4><div class="tooltip-placeholder"></div>`,
-      );
-      cardContent.appendChild(tagElement);
-      const tooltipElem = cardContent.querySelector('.tooltip-placeholder');
-      const tooltipConfig = {
-        position: 'top',
-        color: 'grey',
-        content: product.join(', '),
-      };
-      createTooltip(container, tooltipElem, tooltipConfig);
-    } else {
-      const tagText = product ? product.join(', ') : '';
-      tagElement = createTag('div', { class: 'browse-card-tag-text' }, `<h4>${tagText}</h4>`);
-      cardContent.appendChild(tagElement);
+  if (product?.length > 0 || failedToLoad) {
+    const tagText = product?.join(', ') || '';
+    const isMultiSolution = product?.length > 1;
+
+    const tagElement = createTag(
+      'div',
+      { class: 'browse-card-tag-text' },
+      `<h4>${isMultiSolution ? placeholders.multiSolutionText || 'multisolution' : tagText}</h4>`,
+    );
+
+    if (isMultiSolution) {
+      const tooltip = htmlToElement(`
+        <div class="tooltip-placeholder">
+          <div class="tooltip tooltip-top tooltip-grey">
+            <span class="icon icon-info"></span>
+            <span class="tooltip-text">${tagText}</span>
+          </div>
+        </div>
+      `);
+      // Eventlistener to make the tooltip clickable inside the anchor tag
+      tooltip.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      });
+
+      tagElement.appendChild(tooltip);
+      decorateIcons(tagElement);
     }
+    cardContent.appendChild(tagElement);
   }
 
   if (title) {

@@ -4,7 +4,6 @@ import { buildCard, buildNoResultsContent } from '../../scripts/browse-card/brow
 import BrowseCardsTargetDataAdapter from '../../scripts/browse-card/browse-cards-target-data-adapter.js';
 import defaultAdobeTargetClient from '../../scripts/adobe-target/adobe-target.js';
 import getEmitter from '../../scripts/events.js';
-import { hideTooltipOnScroll } from '../../scripts/browse-card/browse-card-tooltip.js';
 import { setTargetDataAsBlockAttribute } from '../../scripts/utils/analytics-utils.js';
 import { formatId } from '../../scripts/browse-card/browse-card-utils.js';
 
@@ -21,69 +20,11 @@ const targetEventEmitter = getEmitter('loadTargetBlocks');
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 let displayBlock = false;
 
-let DEFAULT_NUM_CARDS = 4;
-let resizeObserved;
-let cardsWidth;
-let cardsGap;
+const DEFAULT_NUM_CARDS = 4;
 const seeMoreConfig = {
   minWidth: 1024,
   noOfRows: 2,
 };
-
-/**
- * Debounces a function call to limit its execution rate.
- * @param {number} ms - The debounce delay in milliseconds.
- * @param {Function} fn - The function to debounce.
- * @returns {Function} - The debounced function.
- */
-// eslint-disable-next-line class-methods-use-this
-function debounce(func, delay) {
-  let timeoutId;
-
-  return function debounced(...args) {
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-    }
-    timeoutId = setTimeout(() => {
-      func.apply(this, args);
-    }, delay);
-  };
-}
-
-function resizeObserverHandler(callback, block) {
-  const debouncedCallback = debounce(callback, 500);
-  const wrapperResizeObserver = new ResizeObserver(debouncedCallback);
-  wrapperResizeObserver.observe(block);
-}
-
-function calculateNumberOfCardsToRender(container) {
-  if (window.innerWidth < seeMoreConfig.minWidth) {
-    DEFAULT_NUM_CARDS = 4;
-  } else {
-    let cardsContainer = container.querySelector('.card-wrapper');
-    if (!cardsContainer) cardsContainer = container.querySelector('.browse-card-shimmer-wrapper');
-    let containerWidth = container.offsetWidth;
-
-    if (!containerWidth) {
-      const section = container.closest('.section');
-      if (section) {
-        const originalDisplay = section.style.display;
-        section.style.display = 'block';
-        section.style.visibility = 'hidden';
-        containerWidth = container.offsetWidth;
-        section.style.display = originalDisplay;
-        section.style.visibility = 'visible';
-      }
-    }
-
-    if (!cardsWidth) cardsWidth = cardsContainer?.offsetWidth || 256;
-    if (!cardsGap) cardsGap = parseInt(getComputedStyle(cardsContainer).gap, 10) || 24;
-    const visibleItems = Math.floor((containerWidth + cardsGap) / (cardsWidth + cardsGap));
-    if (visibleItems) {
-      DEFAULT_NUM_CARDS = visibleItems;
-    }
-  }
-}
 
 function createSeeMoreButton(block, contentDiv, addNewRowOfCards, cardData) {
   if (!block.querySelector('.recently-reviewed-see-more-btn')) {
@@ -108,7 +49,7 @@ function createSeeMoreButton(block, contentDiv, addNewRowOfCards, cardData) {
             div.classList.add('fade-out');
             div.classList.remove('fade-in');
             const handleTransitionEnd = () => {
-              div.style.display = 'none';
+              div.classList.add('hide-see-more-row');
               div.removeEventListener('animationend', handleTransitionEnd);
             };
             div.addEventListener('animationend', handleTransitionEnd);
@@ -123,11 +64,10 @@ function createSeeMoreButton(block, contentDiv, addNewRowOfCards, cardData) {
 
       function showNewRow() {
         contentDivs.forEach((div, index) => {
-          div.style.display = 'flex';
+          div.classList.remove('hide-see-more-row');
           if (index > newRow - 1) {
-            div.style.display = 'none';
             div.classList.remove('fade-in');
-            div.classList.add('fade-out');
+            div.classList.add('fade-out', 'hide-see-more-row');
           } else {
             div.classList.add('fade-in');
             div.classList.remove('fade-out');
@@ -219,6 +159,7 @@ export default async function decorate(block) {
   defaultAdobeTargetClient.checkTargetSupport().then((targetSupport) => {
     let headingElement;
     let descriptionElement;
+    block.classList.add('browse-cards-block');
     if (!block.dataset.targetScope) {
       [headingElement, descriptionElement] = [...block.children].map((row) => row.firstElementChild);
     } else {
@@ -240,9 +181,6 @@ export default async function decorate(block) {
       titleContainer.appendChild(descriptionElement);
       block.appendChild(navContainer);
     }
-
-    let isTooltipListenerAdded = false;
-    resizeObserved = false;
 
     function addNewRowOfCards(cardData, args = { clear: false }) {
       let contentDivs = block.querySelectorAll('.browse-cards-block-content');
@@ -270,10 +208,6 @@ export default async function decorate(block) {
         buildCard(contentDiv, cardDiv, item);
         contentDiv.appendChild(cardDiv);
       });
-      if (!isTooltipListenerAdded) {
-        hideTooltipOnScroll(contentDiv);
-        isTooltipListenerAdded = true;
-      }
       if (!cardData[noOfCards + DEFAULT_NUM_CARDS]) {
         block.dataset.allRowsLoaded = true;
         block.dataset.maxRows = block.dataset.browseCardRows;
@@ -288,28 +222,6 @@ export default async function decorate(block) {
       }
     }
 
-    function calculateNumberOfCardsOnResize(cardData) {
-      if (!resizeObserved) {
-        let previousWidth = block.offsetWidth;
-        resizeObserverHandler((entries) => {
-          if (resizeObserved) {
-            entries.forEach((entry) => {
-              const { width } = entry.contentRect;
-              if (!previousWidth) previousWidth = block.offsetWidth;
-              if (Math.abs(entry.contentRect.width - previousWidth) > 1) {
-                // Calculate no. of cards that fits
-                calculateNumberOfCardsToRender(block);
-                addNewRowOfCards(cardData, { clear: true });
-                // Render the new set of cards
-                previousWidth = width;
-              }
-            });
-          }
-          resizeObserved = true;
-        }, block);
-      }
-    }
-
     function renderCards() {
       defaultAdobeTargetClient.getTargetData(block.dataset.targetScope).then(async (resp) => {
         updateCopyFromTarget(resp, headingElement, descriptionElement);
@@ -319,9 +231,7 @@ export default async function decorate(block) {
           appendNavAndContent();
           buildCardsShimmer.addShimmer(block);
           const cardData = await BrowseCardsTargetDataAdapter.mapResultsToCardsData(resp.data);
-          calculateNumberOfCardsToRender(block);
           addNewRowOfCards(cardData, { clear: true }); // eslint-disable-next-line no-new
-          calculateNumberOfCardsOnResize(cardData);
           setTargetDataAsBlockAttribute(block, resp);
         } else {
           const contentDiv = document.createElement('div');

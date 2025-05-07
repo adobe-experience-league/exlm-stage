@@ -548,7 +548,7 @@ body {
   font-family: var(--body-font-family);
   line-height: 1.6;
   color: var(--text-color);
-  background-color: var(--background-color);
+  background-color: var(--highlight-light-background-color);
   display: none;
   overflow-wrap: break-word;
 }
@@ -961,6 +961,7 @@ picture[align="right"] {
 
 .section {
   padding: 30px 16px;
+  background-color: var(--highlight-light-background-color);
 
   /* section metadata */
 }
@@ -973,19 +974,12 @@ picture[align="right"] {
   margin-bottom: 0;
 }
 
-.section.highlight {
-  background-color: var(--highlight-light-background-color);
+.section.bg-white {
+  background-color: var(--background-color);
 }
 
-.section.highlight.icon-block-container {
-  padding: 32px 36px 48px;
-}
-
-.section.highlight.icon-block-container > div > h3 {
-  font-size: var(--spectrum-font-size-700);
-  line-height: 42px;
-  text-align: center;
-  margin: 0 0 36px;
+.section.bg-dark-gray {
+  background-color: var(--highlight-dark-background-color);
 }
 
 .section.tabs-container {
@@ -1049,14 +1043,6 @@ body[class^="browse-"] .browse-filters-full-container .browse-filters-pagination
 }
 
 @media (min-width: 600px) {
-  .section.highlight.icon-block-container {
-    padding: 80px 86px;
-  }
-
-  .section.highlight.icon-block-container > div > h3 {
-    text-align: left;
-  }
-
   body[class^="browse-"] .browse-filters-full-container .browse-filters-pagination, body[class^="browse-"] .browse-filters-full-container .browse-filters-one-pg-result {
     margin-bottom: 58px;
   }
@@ -1115,7 +1101,7 @@ body[class^="browse-"] .browse-filters-full-container .browse-filters-pagination
     grid-row: 1/100;
     width: 224px;
     height: 100%;
-    padding: 0 0 0 32px;
+    padding: 0;
   }
 }
 
@@ -1135,3 +1121,30 @@ body[class^="browse-"] .browse-filters-full-container .browse-filters-pagination
   min-height: 1em;
   height: var(--placeholder-height);
 }
+
+.ue-table-block {
+  display: table;
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1em;
+}
+
+.ue-table-block > div {
+  display: table-row;
+}
+
+.ue-table-block > div > div {
+  display: table-cell;
+  padding: 8px;
+  border: 1px solid #ddd;
+}
+
+.ue-table-block::before {
+  content: attr(data-block-name);
+  display: table-cell;
+  padding: 8px;
+  border: 1px solid #ddd;
+  background-color: #f5cbcd;
+}
+
+

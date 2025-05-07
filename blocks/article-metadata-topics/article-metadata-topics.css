@@ -1,7 +1,6 @@
 .article-metadata-topics ul {
   list-style: none;
-  margin-top: 4px;
-  margin-bottom: 9px;
+  margin: 4px 0;
   margin-left: 0;
   line-height: 25.6px;
 }
@@ -9,6 +8,11 @@
 .article-metadata-topics li {
   display: inline-block;
   font-size: var(--spectrum-font-size-100);
+}
+
+.article-metadata-topics li + li:not(:last-child)::after {
+  content: ' |';
+  margin-left: 0.75em;
 }
 
 .article-metadata-topics li:first-child {
@@ -34,5 +38,4 @@
   cursor: default;
   color: inherit;
   font-size: var(--spectrum-font-size-100);
-  margin-right: 7px;
 }

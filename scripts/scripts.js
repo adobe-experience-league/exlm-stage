@@ -45,6 +45,11 @@ async function loadFonts() {
  * Considers pathnames like /en/path/to/content and /content/exl/global/en/path/to/content.html for both EDS and AEM
  */
 export function getPathDetails() {
+  const languagesMap = new Map([
+    ['pt-BR', 'pt-br'],
+    ['zh-CN', 'zh-hans'],
+    ['zh-TW', 'zh-hant'],
+  ]);
   const { pathname } = window.location;
   const extParts = pathname.split('.');
   const ext = extParts.length > 1 ? extParts[extParts.length - 1] : '';
@@ -53,9 +58,10 @@ export function getPathDetails() {
   const safeLangGet = (index) => (parts.length > index ? parts[index] : 'en');
   // 4 is the index of the language in the path for AEM content paths like  /content/exl/global/en/path/to/content.html
   // 1 is the index of the language in the path for EDS paths like /en/path/to/content
-  let lang = isContentPath ? safeLangGet(4) : safeLangGet(1);
+  const rawLang = isContentPath ? safeLangGet(4) : safeLangGet(1);
+  let lang = languagesMap.get(rawLang) || rawLang;
   // remove suffix from lang if any
-  if (lang.indexOf('.') > -1) {
+  if (lang?.indexOf('.') > -1) {
     lang = lang.substring(0, lang.indexOf('.'));
   }
   if (!lang) lang = 'en'; // default to en
@@ -171,10 +177,14 @@ function addBrowseRail(main) {
 
 function addBrowseBreadCrumb(main) {
   if (!main.querySelector('.browse-breadcrumb.block')) {
-    // add new section at the top
-    const section = document.createElement('div');
-    main.prepend(section);
-    section.append(buildBlock('browse-breadcrumb', []));
+    const section = main.querySelector('main > div');
+    if (section) {
+      section.prepend(buildBlock('browse-breadcrumb', []));
+    } else {
+      const newSection = document.createElement('div');
+      main.prepend(newSection);
+      newSection.append(buildBlock('browse-breadcrumb', []));
+    }
   }
 }
 
@@ -330,29 +340,18 @@ export function decorateExternalLinks(main) {
 }
 
 /**
- * Links that have urls with JSON the hash, the JSON will be translated to attributes
- * eg <a href="https://example.com#{"target":"_blank", "auth-only": "true"}">link</a>
- * will be translated to <a href="https://example.com" target="_blank" auth-only="true">link</a>
+ * Adds attributes to <a> tags based on special keys in the URL.
+ *
+ * If a URL contains '@newtab', it adds target="_blank".
+ * Example:
+ * <a href="https://example.com@newtab"> → <a href="https://example.com" target="_blank">
+ *
  * @param {HTMLElement} block
  */
 export const decorateLinks = (block) => {
-  const links = block.querySelectorAll('a');
-  links.forEach((link) => {
-    const decodedHref = decodeURIComponent(link.getAttribute('href'));
-    const firstCurlyIndex = decodedHref.indexOf('{');
-    const lastCurlyIndex = decodedHref.lastIndexOf('}');
-    if (firstCurlyIndex > -1 && lastCurlyIndex > -1) {
-      // everything between curly braces is treated as JSON string.
-      const optionsJsonStr = decodedHref.substring(firstCurlyIndex, lastCurlyIndex + 1);
-      const fixedJsonString = optionsJsonStr.replace(/'/g, '"'); // JSON.parse function expects JSON strings to be formatted with double quotes
-      const parsedJSON = JSON.parse(fixedJsonString);
-      Object.entries(parsedJSON).forEach(([key, value]) => {
-        link.setAttribute(key.trim(), value);
-      });
-      // remove the JSON string from the hash, if JSON string is the only thing in the hash, remove the hash as well.
-      const endIndex = decodedHref.charAt(firstCurlyIndex - 1) === '#' ? firstCurlyIndex - 1 : firstCurlyIndex;
-      link.href = decodedHref.substring(0, endIndex);
-    }
+  block.querySelectorAll('a[href*="@newtab"]').forEach((link) => {
+    link.href = link.href.replace('@newtab', '');
+    link.setAttribute('target', '_blank');
   });
 };
 
@@ -523,7 +522,7 @@ export function getLink(edsPath) {
 /** @param {HTMLMapElement} main */
 async function buildPreMain(main) {
   const { lang } = getPathDetails();
-  const fragmentUrl = getMetadata('fragment');
+  const fragmentUrl = getMetadata('site-wide-banner-fragment');
 
   if (!fragmentUrl) return;
 
@@ -543,7 +542,6 @@ async function buildPreMain(main) {
     main.before(preMain);
     decorateSections(preMain);
     decorateBlocks(preMain);
-    loadBlocks(preMain);
   }
 }
 
@@ -718,7 +716,6 @@ export function getConfig() {
     liveEventsUrl: `${prodAssetsCdnOrigin}/thumb/upcoming-events.json`,
     adlsUrl: 'https://learning.adobe.com/courses.result.json',
     industryUrl: `${cdnOrigin}/api/industries?page_size=200&sort=Order&lang=${lang}`,
-    searchUrl: `${cdnOrigin}/search.html`,
     articleUrl: `${cdnOrigin}/api/articles`,
     solutionsUrl: `${cdnOrigin}/api/solutions?page_size=100`,
     pathsUrl: `${cdnOrigin}/api/paths`,
@@ -872,8 +869,10 @@ async function loadThemes() {
  */
 async function loadLazy(doc) {
   const main = doc.querySelector('main');
+  const preMain = doc.body.querySelector(':scope > aside');
   loadIms(); // start it early, asyncronously
   await loadThemes();
+  if (preMain) await loadBlocks(preMain);
   await loadBlocks(main);
 
   const { hash } = window.location;
@@ -979,6 +978,16 @@ export async function fetchFragment(rePath, lang) {
   const path = `${window.hlx.codeBasePath}/fragments/${lang}/${rePath}.plain.html`;
   const fallback = `${window.hlx.codeBasePath}/fragments/en/${rePath}.plain.html`;
   const response = await fetchWithFallback(path, fallback);
+  return response.text();
+}
+
+/** fetch fragment relative to /${lang}/global-fragments/ */
+export async function fetchGlobalFragment(metaName, fallback, lang) {
+  const fragmentPath = getMetadata(metaName);
+  const fragmentUrl = fragmentPath?.startsWith('/en/') ? fragmentPath.replace('/en/', `/${lang}/`) : fallback;
+  const path = `${window.hlx.codeBasePath}${fragmentUrl}.plain.html`;
+  const fallbackPath = `${window.hlx.codeBasePath}${fallback}.plain.html`;
+  const response = await fetchWithFallback(path, fallbackPath);
   return response.text();
 }
 
@@ -1263,13 +1272,32 @@ async function loadPage() {
     decodeAemPageMetaTags();
   }
 
-  const { lang } = getPathDetails();
+  const { suffix: currentPagePath, lang } = getPathDetails();
   document.documentElement.lang = lang || 'en';
   const isMainPage = window?.location.pathname === '/' || window?.location.pathname === `/${lang}`;
 
   const isUserSignedIn = async () => {
     await loadIms();
     return window?.adobeIMS?.isSignedInUser();
+  };
+
+  const loadTarget = async (isAlreadySignedIn = false) => {
+    const targetSupportedPaths = ['/perspectives', '/home'];
+    if (targetSupportedPaths.includes(currentPagePath)) {
+      const loadTargetModule = async () => {
+        const mod = await import('./adobe-target/adobe-target.js');
+        const defaultAdobeTargetClient = mod.default;
+        const isTargetSupported = await defaultAdobeTargetClient.checkTargetSupport(currentPagePath);
+        if (isTargetSupported) {
+          defaultAdobeTargetClient.mapComponentsToTarget();
+        }
+      };
+
+      const isSignedIn = isAlreadySignedIn || (await isUserSignedIn());
+      if (isSignedIn) {
+        loadTargetModule();
+      }
+    }
   };
 
   const handleProfilePage = async () => {
@@ -1279,12 +1307,7 @@ async function loadPage() {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
         loadPage();
-        const mod = await import('./adobe-target/adobe-target.js');
-        const defaultAdobeTargetClient = mod.default;
-        const isTargetSupported = await defaultAdobeTargetClient.checkTargetSupport();
-        if (isTargetSupported) {
-          defaultAdobeTargetClient.mapComponentsToTarget();
-        }
+        loadTarget(signedIn);
       } else {
         await window?.adobeIMS?.signIn();
       }
@@ -1311,5 +1334,6 @@ async function loadPage() {
     await handleMainPage();
   } else {
     loadPage();
+    loadTarget();
   }
 })();

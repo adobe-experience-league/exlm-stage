@@ -9,8 +9,8 @@ import {
   decorateLinks,
   getConfig,
   getLink,
-  fetchFragment,
   getPathDetails,
+  fetchGlobalFragment,
 } from '../../scripts/scripts.js';
 import getProducts from '../../scripts/utils/product-utils.js';
 import {
@@ -29,7 +29,7 @@ import ProfileMenu from './profile-menu.js';
 
 /**
  *  @typedef {Object} CommunityOptions
- *  @property {boolean} active
+ *  @property {boolean | undefined} active
  *  @property {boolean} hasMessages
  *  @property {boolean} hasNotifications
  *  @property {string} notificationsUrl
@@ -81,18 +81,7 @@ async function loadSearchElement() {
     window.headlessSolutionProductKey = solutionTag;
   }
   searchElementPromise =
-    searchElementPromise ??
-    new Promise((resolve, reject) => {
-      // eslint-disable-next-line
-      Promise.all([import('../../scripts/search/search.js')])
-        .then((results) => {
-          const [mod] = results;
-          resolve(mod.default ?? mod);
-        })
-        .catch((e) => {
-          reject(e);
-        });
-    });
+    searchElementPromise ?? import('../../scripts/search/search.js').then((mod) => mod.default ?? mod);
   return searchElementPromise;
 }
 
@@ -342,8 +331,8 @@ const buildFeaturedProductsNavLinks = async (navBlock, lang) => {
   const productList = await getProducts(lang, 'browse');
   [...navBlock.querySelectorAll('.nav-item')].forEach((navItemEl) => {
     // featured-products property is expected to be present on header.
-    if (navItemEl.querySelector(':scope > a[featured-products]')) {
-      const featuredProductLi = navBlock.querySelector('li.nav-item a[featured-products]');
+    if (navItemEl.querySelector(':scope > a[href*="@featured-products"]')) {
+      const featuredProductLi = navBlock.querySelector('li.nav-item a[href*="@featured-products"]');
       // Remove the <li> element from the DOM
       featuredProductLi.remove();
       productList.forEach((item) => {
@@ -420,9 +409,9 @@ const searchDecorator = async (searchBlock, decoratorOptions) => {
   decoratorState.searchLinkHtml = searchLink.outerHTML;
 
   // get search placeholder
-  const searchPlaceholder = getCell(searchBlock, 1, 2)?.firstChild;
+  const searchPlaceholder = getCell(searchBlock, 2, 1)?.firstChild;
   // build search options
-  const searchOptions = getCell(searchBlock, 1, 3)?.firstElementChild?.children || [];
+  const searchOptions = getCell(searchBlock, 3, 1)?.firstElementChild?.children || [];
   const options = [...searchOptions].map((option) => option.textContent);
 
   searchBlock.innerHTML = '';
@@ -476,7 +465,7 @@ const searchDecorator = async (searchBlock, decoratorOptions) => {
   const Search = await loadSearchElement();
   searchBlock.append(searchWrapper);
 
-  const searchItem = new Search({ searchBlock });
+  const searchItem = new Search({ searchBlock, searchUrl: searchLink?.href });
   searchItem.configureAutoComplete({
     searchOptions: options,
     showSearchSuggestions: true,
@@ -629,7 +618,6 @@ const productGridDecorator = async (productGridBlock, decoratorOptions) => {
  */
 const adobeLogoDecorator = async (adobeLogoBlock) => {
   simplifySingleCellBlock(adobeLogoBlock);
-  adobeLogoBlock.querySelector('a').setAttribute('title', 'logo');
   decorateIcons(adobeLogoBlock);
   return adobeLogoBlock;
 };
@@ -720,7 +708,9 @@ class ExlHeader extends HTMLElement {
   }
 
   async decorate() {
-    const headerFragment = await fetchFragment('header/header', this.decoratorOptions.lang);
+    const headerMeta = 'header-fragment';
+    const fallback = '/en/global-fragments/header';
+    const headerFragment = await fetchGlobalFragment(headerMeta, fallback, this.decoratorOptions.lang);
     if (headerFragment) {
       loadSearchElement();
 
@@ -750,6 +740,7 @@ class ExlHeader extends HTMLElement {
         block.style.visibility = 'visible';
         this.dispatchEvent(new Event(`${className}-decorated`));
       };
+
       // Do this first to ensure all links are decorated correctly before they are used.
       decorateLinks(header);
       const logoP = decorateHeaderBlock('adobe-logo', this.adobeLogoDecorator, this.decoratorOptions);
