@@ -91,6 +91,7 @@ export async function pushPageDataLayer(language) {
         role: userData.role || [],
         experienceLevel: userData.level || [],
         solutionLevel: userData.solutionLevels || [],
+        certifications: userData.certifications || [],
         industry: userData.industryInterests || [],
         notificationPref: userData.emailOptIn === true,
         org: userData.org || '',
@@ -303,6 +304,26 @@ export function pushSignupEvent(target, action) {
       webPageDetails: {
         pageViews: { value: 0 },
       },
+    },
+  });
+}
+
+/**
+ * Pushes video metadata to the data layer on page load,
+ * including videoId, thumbnail URL, and video URL.
+ * @param {string} videoId - The MPC video ID.
+ * @param {string} videoUrl - URL to the MPC video.
+ * @param {string} thumbnailUrl - Thumbnail image URL.
+ */
+export function pushVideoMetadataOnLoad(videoId, videoUrl, thumbnailUrl) {
+  window.adobeDataLayer = window.adobeDataLayer || [];
+
+  window.adobeDataLayer.push({
+    event: 'videoMetadata',
+    video: {
+      url: videoUrl,
+      thumbnailUrl,
+      id: videoId,
     },
   });
 }
