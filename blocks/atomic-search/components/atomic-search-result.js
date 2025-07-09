@@ -15,6 +15,7 @@ import { htmlToElement, getConfig } from '../../../scripts/scripts.js';
 import { INITIAL_ATOMIC_RESULT_CHILDREN_COUNT } from './atomic-result-children.js';
 
 const { communityTopicsUrl } = getConfig();
+const MAX_HYDRATION_ATTEMPTS = 10;
 
 export const atomicResultStyles = `
                   <style>
@@ -445,6 +446,15 @@ export default function atomicResultHandler(block, placeholders) {
     }, 200);
   }
 
+  function removeBlockSkeleton() {
+    const skeleton = container.parentElement.querySelector('.skeleton-wrapper');
+    if (skeleton) {
+      container.style.cssText = '';
+      baseElement.classList.remove('list-wrap-skeleton');
+      container.parentElement.removeChild(skeleton);
+    }
+  }
+
   function decorateChildrenSection({ btn, element }) {
     const isCollapsed = btn.dataset.state === 'collapsed';
     btn.innerHTML = `
@@ -494,7 +504,9 @@ export default function atomicResultHandler(block, placeholders) {
         }
         const elements = childrenRoot.querySelectorAll('.result-component');
         elements.forEach(decorateAtomicChildResult);
-        const countString = element.parentElement?.querySelector('.child-result-count')?.textContent?.trim();
+        const countString = element.parentElement?.parentElement
+          ?.querySelector('.child-result-count')
+          ?.textContent?.trim();
         const childrenCount = countString && !Number.isNaN(countString) ? +countString : 0;
 
         if (childrenCount <= INITIAL_ATOMIC_RESULT_CHILDREN_COUNT) {
@@ -594,11 +606,17 @@ export default function atomicResultHandler(block, placeholders) {
     const results = container.querySelectorAll('atomic-result');
     const isMobileView = isMobile();
     container.dataset.view = isMobileView ? 'mobile' : 'desktop';
-    results.forEach((resultEl) => {
-      const hydrateResult = () => {
+    results.forEach((resultElement) => {
+      const hydrateResult = (resultEl) => {
         const resultShadow = resultEl.shadowRoot;
         if (!resultShadow) {
-          waitForChildElement(resultEl, hydrateResult, 25);
+          waitForChildElement(
+            resultEl,
+            () => {
+              hydrateResult(resultEl);
+            },
+            25,
+          );
           return;
         }
 
@@ -606,8 +624,10 @@ export default function atomicResultHandler(block, placeholders) {
         const resultContentType = resultItem?.querySelector('.result-content-type');
         const contentTypeElWrap = resultContentType?.firstElementChild?.shadowRoot;
 
-        if (!resultItem || !contentTypeElWrap) {
-          waitFor(hydrateResult, 20);
+        if (!resultItem) {
+          waitFor(() => {
+            hydrateResult(resultEl);
+          }, 50);
           return;
         }
 
@@ -616,9 +636,30 @@ export default function atomicResultHandler(block, placeholders) {
           block.removeChild(blockLevelSkeleton);
         }
 
+        const recommendationBadgeExists = !!resultItem.querySelector('.atomic-recommendation-badge');
+        if (recommendationBadgeExists) {
+          const resultRoot = resultShadow.querySelector('.result-root');
+          resultRoot.classList.add('recommendation-badge');
+        }
+        const currentHydrationCount = +(resultEl.dataset.hydration || '0');
+        if (currentHydrationCount >= MAX_HYDRATION_ATTEMPTS) {
+          removeBlockSkeleton();
+          return; // Return to avoid repeated hydrations endlessly.
+        }
+        resultEl.dataset.hydration = `${currentHydrationCount + 1}`;
+
+        if (!contentTypeElWrap) {
+          waitFor(() => {
+            hydrateResult(resultEl);
+          }, 50);
+          return;
+        }
+
         const contentTypeElParent = contentTypeElWrap?.querySelector('ul');
         if (!contentTypeElParent) {
-          waitFor(hydrateResult, 20);
+          waitFor(() => {
+            hydrateResult(resultEl);
+          }, 20);
           return;
         }
         if (!resultItem.dataset.decorated) {
@@ -627,21 +668,10 @@ export default function atomicResultHandler(block, placeholders) {
         }
 
         // Remove skeleton
-        const skeleton = container.parentElement.querySelector('.skeleton-wrapper');
-        if (skeleton) {
-          container.style.cssText = '';
-          baseElement.classList.remove('list-wrap-skeleton');
-          container.parentElement.removeChild(skeleton);
-        }
+        removeBlockSkeleton();
 
         const atomicResultChildren = resultItem.querySelector('atomic-result-children');
         handleAtomicResultChildrenUI(atomicResultChildren);
-
-        const recommendationBadgeExists = !!resultItem.querySelector('.atomic-recommendation-badge');
-        if (recommendationBadgeExists) {
-          const resultRoot = resultShadow.querySelector('.result-root');
-          resultRoot.classList.add('recommendation-badge');
-        }
 
         const productElWrap = resultItem?.querySelector('.result-product')?.firstElementChild?.shadowRoot;
         const productElements = productElWrap?.querySelectorAll('li') || [];
@@ -766,7 +796,8 @@ export default function atomicResultHandler(block, placeholders) {
         }
       };
 
-      hydrateResult();
+      resultElement.dataset.hydration = '0';
+      hydrateResult(resultElement);
     });
 
     const layoutSectionEl = block.querySelector('atomic-layout-section[section="results"]');
