@@ -12,6 +12,7 @@ import { ContentTypeIcons } from './atomic-search-icons.js';
 import { decorateIcons } from '../../../scripts/lib-franklin.js';
 import { htmlToElement, getConfig } from '../../../scripts/scripts.js';
 import { INITIAL_ATOMIC_RESULT_CHILDREN_COUNT } from './atomic-result-children.js';
+import isFeatureEnabled from '../../../scripts/utils/feature-flag-utils.js';
 
 const { communityTopicsUrl } = getConfig();
 const MAX_HYDRATION_ATTEMPTS = 10;
@@ -821,6 +822,21 @@ export default function atomicResultHandler(block, placeholders) {
           resultRoot.classList.add('recommendation-badge');
         }
 
+        // Handle el_kudo_status field - support both legacy numeric and new user ID format
+        // This needs to run on every re-render (mobile/desktop view switches)
+        const kudoStatusEl = resultShadow?.querySelector('atomic-result-text[field="el_kudo_status"]');
+        if (kudoStatusEl) {
+          const rawKudoStatus = resultEl.result?.result?.raw?.el_kudo_status;
+
+          // Check if it's the new format (string = user IDs, single or semicolon-separated)
+          if (typeof rawKudoStatus === 'string' && rawKudoStatus.trim() !== '') {
+            const userIds = rawKudoStatus.split(';').filter((id) => id.trim() !== '');
+            const count = userIds.length;
+            kudoStatusEl.textContent = count.toString();
+          }
+          // Legacy numeric format (number type) - no change needed, displays as-is
+        }
+
         if (resultItem.dataset.decorated && currentHydrationCount >= MAX_HYDRATION_ATTEMPTS) {
           removeBlockSkeleton();
           return; // Return to avoid repeated hydrations endlessly.
@@ -868,16 +884,19 @@ export default function atomicResultHandler(block, placeholders) {
 
           const label = slot.textContent.trim();
           if (!label) return;
+          if (!isFeatureEnabled('isGainsight')) {
+            const link = document.createElement('a');
+            link.href = `${communityTopicsUrl}${encodeURIComponent(label)}`;
+            link.textContent = label;
+            link.target = '_blank';
+            link.style.textDecoration = 'none';
+            link.style.color = 'inherit';
 
-          const link = document.createElement('a');
-          link.href = `${communityTopicsUrl}${encodeURIComponent(label)}`;
-          link.textContent = label;
-          link.target = '_blank';
-          link.style.textDecoration = 'none';
-          link.style.color = 'inherit';
-
-          li.innerHTML = '';
-          li.appendChild(link);
+            li.textContent = '';
+            li.appendChild(link);
+          } else {
+            li.textContent = label;
+          }
         });
         const rawContentType = resultEl.result?.result?.raw?.el_contenttype;
         const contentTypeValues = Array.isArray(rawContentType) ? structuredClone(rawContentType) : null;
