@@ -417,6 +417,29 @@ export const decorateLinks = (block) => {
 };
 
 /**
+ * Decorates links within sections marked with data-new-tab="true" to open in new tab
+ * @param {HTMLElement} main - The main container element
+ */
+export const decorateLinksWithinSection = (main) => {
+  const newTabSections = main.querySelectorAll('.section[data-new-tab="true"]');
+  if (newTabSections.length === 0) return;
+
+  newTabSections?.forEach((section) => {
+    const links = section.querySelectorAll('a');
+
+    links?.forEach((link) => {
+      const href = link.getAttribute('href');
+      if (href && !href.startsWith('#') && !link.hasAttribute('target')) {
+        link.setAttribute('target', '_blank');
+        if (link.hostname !== window.location.hostname) {
+          link.setAttribute('rel', 'noopener noreferrer');
+        }
+      }
+    });
+  });
+};
+
+/**
  * see: https://github.com/adobe-experience-league/exlm-converter/pull/208
  * @param {HTMLElement} main
  */
@@ -623,15 +646,20 @@ export async function waitForLCPonMain(lcpBlocks) {
   document.body.style.display = null;
   const lcpCandidate = document.querySelector('main img');
   await new Promise((resolve) => {
-    if (lcpCandidate && lcpCandidate.src === 'about:error') {
-      resolve(); // error loading image
-    } else if (lcpCandidate && !lcpCandidate.complete) {
-      lcpCandidate.setAttribute('loading', 'eager');
-      lcpCandidate.addEventListener('load', resolve);
-      lcpCandidate.addEventListener('error', resolve);
-    } else {
+    if (!lcpCandidate || (lcpCandidate.complete && lcpCandidate.src === 'about:error')) {
       resolve();
     }
+
+    lcpCandidate.setAttribute('loading', 'eager');
+
+    // Firefox-safe path
+    if (lcpCandidate.decode) {
+      lcpCandidate.decode().then(resolve).catch(resolve); // decode rejects on error
+      return;
+    }
+
+    lcpCandidate.addEventListener('load', resolve, { once: true });
+    lcpCandidate.addEventListener('error', resolve, { once: true });
   });
 }
 
@@ -653,6 +681,7 @@ export function decorateMain(main, isFragment = false) {
   decorateSections(main);
   decorateBlocks(main);
   buildSectionBasedAutoBlocks(main);
+  decorateLinksWithinSection(main);
 }
 
 /**
@@ -1013,6 +1042,7 @@ async function loadDefaultModule(jsPath) {
  * Loads everything that doesn't need to be delayed.
  * @param {Element} doc The container element
  */
+
 async function loadLazy(doc) {
   const main = doc.querySelector('main');
   const preMain = doc.body.querySelector(':scope > aside');
@@ -1027,6 +1057,8 @@ async function loadLazy(doc) {
   await loadThemes();
   if (preMain) await loadBlocks(preMain);
   await loadBlocks(main);
+  const { setupComponentImpressions } = await import('./analytics/lib-analytics.js');
+  setupComponentImpressions();
 
   const { hash } = window.location;
   const element = hash ? doc.getElementById(hash.substring(1)) : false;
