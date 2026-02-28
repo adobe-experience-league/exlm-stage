@@ -90,7 +90,8 @@
       "browse-courses",
       "course-recap",
       "slides",
-      "quiz-scorecard"
+      "quiz-scorecard",
+      "grid-cards"
     ]
   },
   {
@@ -414,6 +415,10 @@
   {
     "id": "cards",
     "components": ["card"]
+  },
+  {
+    "id": "grid-cards",
+    "components": ["grid-card"]
   },
   {
     "id": "icon-block",
