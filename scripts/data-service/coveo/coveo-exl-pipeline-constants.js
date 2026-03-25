@@ -48,6 +48,10 @@ export const CONTENT_TYPES = Object.freeze({
     MAPPING_KEY: 'event',
     LABEL: placeholders.browseCardEventLabel || 'On-Demand Event',
   },
+  ON_DEMAND_EVENT: {
+    MAPPING_KEY: 'Event|On Demand Event',
+    LABEL: placeholders.browseCardEventLabel || 'On-Demand Event',
+  },
   COMMUNITY: {
     MAPPING_KEY: 'community',
     LABEL: placeholders.browseCardCommunityLabel || 'Community',
@@ -58,6 +62,10 @@ export const CONTENT_TYPES = Object.freeze({
   },
   UPCOMING_EVENT: {
     MAPPING_KEY: 'upcoming-event',
+    LABEL: placeholders.browseCardUpcomingEventLabel || 'Upcoming Event',
+  },
+  UPCOMING_EVENT_V2: {
+    MAPPING_KEY: 'Event|Upcoming Event',
     LABEL: placeholders.browseCardUpcomingEventLabel || 'Upcoming Event',
   },
   INSTRUCTOR_LED: {

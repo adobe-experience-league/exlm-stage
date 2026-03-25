@@ -11,10 +11,12 @@ import { sendCoveoClickEvent } from '../coveo-analytics.js';
 import { pushBrowseCardClickEvent } from '../analytics/lib-analytics.js';
 import UserActions from '../user-actions/user-actions.js';
 import { CONTENT_TYPES } from '../data-service/coveo/coveo-exl-pipeline-constants.js';
+import PL_CONTENT_TYPES from '../data-service/premium-learning/premium-learning-constants.js';
 import isFeatureEnabled from '../utils/feature-flag-utils.js';
 
 const bookmarkExclusionContentypes = [
   CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY,
+  CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY,
   CONTENT_TYPES.COMMUNITY.MAPPING_KEY,
   CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY,
   CONTENT_TYPES['VIDEO CLIP'].MAPPING_KEY,
@@ -157,6 +159,8 @@ const buildTagsContent = (cardMeta, tags = []) => {
 
 const buildEventContent = ({ event, contentType, cardContent, card }) => {
   const { time, date } = event;
+  if (!time) return;
+
   const eventInfo = htmlToElement(`
     <div class="browse-card-event-info">
         <span class="icon icon-time"></span>
@@ -277,9 +281,11 @@ const buildCardCtaContent = ({ cardFooter, contentType, viewLinkText, viewLink }
     let icon = null;
     const isLeftPlacement = false;
     if (
-      [CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY, CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY].includes(
-        contentType?.toLowerCase(),
-      )
+      [
+        CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase(),
+        CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY,
+        CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY,
+      ].includes(contentType?.toLowerCase())
     ) {
       icon = 'new-tab-blue';
     } else {
@@ -389,8 +395,10 @@ const buildCardContent = async (card, model, element) => {
   }
 
   if (
-    contentType === CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY ||
-    contentType === CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY
+    contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY.toLowerCase() ||
+    contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase() ||
+    contentType?.toLowerCase() === CONTENT_TYPES.ON_DEMAND_EVENT.MAPPING_KEY.toLowerCase() ||
+    contentType?.toLowerCase() === CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY.toLowerCase()
   ) {
     buildEventContent({ event, contentType, cardContent, card });
   }
@@ -559,6 +567,15 @@ const getOnDemandEventsDecorator = () => {
 export async function buildCard(element, model) {
   const { thumbnail, product, title, contentType, badgeTitle, inProgressStatus, failedToLoad = false } = model;
 
+  // Delegate to PL-specific card builder for premium-learning content types
+  const isPLContent =
+    contentType === PL_CONTENT_TYPES.COURSE.MAPPING_KEY || contentType === PL_CONTENT_TYPES.COHORT.MAPPING_KEY;
+
+  if (isPLContent) {
+    const { buildPLCard } = await import('./browse-cards-premium-learning.js');
+    return buildPLCard(element, model);
+  }
+
   element.setAttribute('data-analytics-content-type', contentType);
   // lowercase all urls - because all of our urls are lower-case
   model.viewLink = lowerCaseSameOriginUrls(model.viewLink);
@@ -581,6 +598,12 @@ export async function buildCard(element, model) {
     }
   }
 
+  // CSS class names for event types to handle pipes
+  let cssType = type;
+  if (type?.toLowerCase().includes('event')) {
+    cssType = type.replace(/[|\s]+/g, '-');
+  }
+
   const clickableLink = !(isVideoClip && !model.parentURL);
   const showVideoIconOnly = isVideoClip;
 
@@ -594,7 +617,7 @@ export async function buildCard(element, model) {
 
   const card = createTag(
     'div',
-    { class: `browse-card ${type}-card ${failedToLoad ? 'browse-card-frozen' : ''}` },
+    { class: `browse-card ${cssType}-card ${failedToLoad ? 'browse-card-frozen' : ''}` },
     `<div class="browse-card-figure"></div>${
       showVideoIconOnly ? `<div class="browse-card-video-clip"></div>` : ''
     }<div class="browse-card-content"></div><div class="browse-card-footer"></div>`,
@@ -671,7 +694,7 @@ export async function buildCard(element, model) {
     } else {
       const bannerElement = createTag('h3', { class: 'browse-card-banner' });
       bannerElement.innerText = badgeTitle || '';
-      bannerElement.style.backgroundColor = `var(--browse-card-color-${type}-primary)`;
+      bannerElement.style.backgroundColor = `var(--browse-card-color-${cssType}-primary)`;
       cardFigure.appendChild(bannerElement);
     }
   }
@@ -719,6 +742,7 @@ export async function buildCard(element, model) {
     cardContent.appendChild(titleElement);
   }
   await loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card.css`);
+  loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card-premium-learning.css`);
 
   // For course content type, add level and duration info right after the title
   if (type === CONTENT_TYPES.COURSE.MAPPING_KEY.toLowerCase()) {
@@ -773,9 +797,11 @@ export async function buildCard(element, model) {
       }
     });
     if (
-      [CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY, CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY].includes(
-        contentType?.toLowerCase(),
-      )
+      [
+        CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY,
+        CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY,
+        CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY,
+      ].includes(contentType?.toLowerCase())
     ) {
       cardContainer.setAttribute('target', '_blank');
     }
@@ -830,31 +856,34 @@ export async function buildCard(element, model) {
     { once: true },
   );
 
-  // Apply special decorations for upcoming events v2 - change for all upcoming events later
-  const v2 = card.closest('.upcoming-event-v2');
-  const browseFilters = card.closest('.browse-filters');
-  const isBrowseFiltersUpcoming = browseFilters && card.classList.contains('upcoming-event-card');
+  const isUpcomingEvent = contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase();
+  const isOnDemandEvent = contentType?.toLowerCase() === CONTENT_TYPES.ON_DEMAND_EVENT.MAPPING_KEY.toLowerCase();
 
-  /* TODO - Remove events-v2 scope during clean up */
-  if (v2) {
-    v2.classList.add('events-v2');
-  } else if (isBrowseFiltersUpcoming) {
-    browseFilters.classList.add('events-v2');
+  // Only apply v2 decorations when feature flag is enabled (content type will be 'Event|Upcoming Event')
+  if (isUpcomingEvent && isFeatureEnabled('isEventsV2')) {
+    const blockContainer = card.closest('.block') || card.closest('[class*="cards"]');
+    if (blockContainer) {
+      blockContainer.classList.add('events-v2');
+    }
+
+    const cardEl = element.querySelector('.browse-card');
+    if (cardEl) {
+      loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card-upcoming-events.css`);
+      // Dynamically import and use the upcoming events decorator
+      getUpcomingEventsDecorator().then(({ decorateUpcomingEvents }) => {
+        decorateUpcomingEvents(cardEl, model);
+      });
+    }
   }
 
-  const cardEl = element.querySelector('.browse-card');
-  if (cardEl && (v2 || isBrowseFiltersUpcoming)) {
-    // Dynamically import and use the upcoming events decorator
-    getUpcomingEventsDecorator().then(({ decorateUpcomingEvents }) => {
-      decorateUpcomingEvents(cardEl, model);
-    });
-  }
-
-  if (model.contentType?.toLowerCase() === CONTENT_TYPES.EVENT.MAPPING_KEY && isFeatureEnabled('isEventsV2')) {
+  if (isOnDemandEvent && isFeatureEnabled('isEventsV2')) {
     const cardElement = element.querySelector('.browse-card');
     // Dynamically import and use the on-demand events decorator
+    loadCSS(`${window.hlx.codeBasePath}/scripts/browse-card/browse-card-on-demand-events.css`);
     getOnDemandEventsDecorator().then(({ decorateOnDemandEvents }) => {
       decorateOnDemandEvents(cardElement, model);
     });
   }
+
+  return undefined;
 }

@@ -1,8 +1,11 @@
 import CoveoDataService from '../data-service/coveo/coveo-data-service.js';
 import ADLSDataService from '../data-service/adls-data-service.js';
+import PLDataService from '../data-service/premium-learning-data-service.js';
 import BrowseCardsCoveoDataAdaptor from './browse-cards-coveo-data-adaptor.js';
 import BrowseCardsADLSAdaptor from './browse-cards-adls-adaptor.js';
+import BrowseCardsPLAdaptor from './browse-cards-premium-learning-adaptor.js';
 import { CONTENT_TYPES } from '../data-service/coveo/coveo-exl-pipeline-constants.js';
+import PL_CONTENT_TYPES from '../data-service/premium-learning/premium-learning-constants.js';
 import PathsDataService from '../data-service/paths-data-service.js';
 import { URL_SPECIAL_CASE_LOCALES, getConfig, getPathDetails, fetchLanguagePlaceholders } from '../scripts.js';
 import { getExlPipelineDataSourceParams } from '../data-service/coveo/coveo-exl-pipeline-helpers.js';
@@ -85,13 +88,25 @@ try {
 }
 
 export function normalizeUpcomingEventModel(model) {
-  const isUpcoming = model?.contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY;
+  const isUpcoming = model?.contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase();
   if (!isUpcoming) return model;
 
   return {
     ...model,
     badgeTitle: CONTENT_TYPES.UPCOMING_EVENT.LABEL,
     viewLinkText: placeholders?.browseCardUpcomingEventViewLabel || 'Register',
+    viewLink: model?.viewLink || '#',
+  };
+}
+
+export function normalizeOnDemandEventModel(model) {
+  const isOnDemand = model?.contentType?.toLowerCase() === CONTENT_TYPES.ON_DEMAND_EVENT.MAPPING_KEY.toLowerCase();
+  if (!isOnDemand) return model;
+
+  return {
+    ...model,
+    badgeTitle: CONTENT_TYPES.ON_DEMAND_EVENT.LABEL,
+    viewLinkText: placeholders?.browseCardEventViewLabel || 'Watch Now',
     viewLink: model?.viewLink || '#',
   };
 }
@@ -193,6 +208,27 @@ const BrowseCardsDelegate = (() => {
   };
 
   /**
+   * Handles premium learning data service to fetch card data.
+   * @returns {Promise<Array>} Array of card data.
+   * @throws {Error} Throws an error if an issue occurs during data fetching.
+   * @private
+   */
+  const handlePLService = async () => {
+    const premiumlearningService = new PLDataService(param);
+    const cardData = await premiumlearningService.fetchDataFromSource();
+
+    if (!cardData) {
+      throw new Error(' Premium learning service error: Unable to fetch data');
+    }
+
+    if (cardData?.data?.length) {
+      return BrowseCardsPLAdaptor.mapResultsToCardsData(cardData);
+    }
+
+    return [];
+  };
+
+  /**
    * Constructs search parameters for Paths data service.
    * @returns {URLSearchParams} Constructed URLSearchParams object.
    * @private
@@ -249,7 +285,7 @@ const BrowseCardsDelegate = (() => {
 
   /**
    * Retrieves the appropriate service function based on the content type.
-   * @param {string} contentType - The content type for which the service is needed.
+   * @param {string|Array<string>} contentType - The content type for which the service is needed.
    * @returns {Function} The corresponding service function for the content type.
    * @private
    */
@@ -259,16 +295,38 @@ const BrowseCardsDelegate = (() => {
       [CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY]: handleUpcomingEventsService,
       [CONTENT_TYPES.INSTRUCTOR_LED.MAPPING_KEY]: handleADLSService,
       [RECOMMENDED_COURSES_CONSTANTS.PATHS.MAPPING_KEY]: handlePathsService,
+      [PL_CONTENT_TYPES.COHORT.MAPPING_KEY]: handlePLService,
+      [PL_CONTENT_TYPES.COURSE.MAPPING_KEY]: handlePLService,
     };
 
     // If the content type is an array, use the handleCoveoService (Works only with Coveo related content types)
     if (Array.isArray(contentType)) {
-      if (contentType.includes(CONTENT_TYPES.UPCOMING_EVENT.MAPPING_KEY)) {
+      // Check if array contains premium-learning content types (premium-learning-course or premium-learning-cohort)
+      const hasPLContent = contentType.some(
+        (type) =>
+          type?.toLowerCase() === PL_CONTENT_TYPES.COHORT.MAPPING_KEY ||
+          type?.toLowerCase() === PL_CONTENT_TYPES.COURSE.MAPPING_KEY,
+      );
+
+      if (hasPLContent) {
+        return handlePLService;
+      }
+
+      // Handle upcoming events with Coveo
+      if (contentType.includes(CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase())) {
         return async () => {
           const cards = await handleCoveoService();
           return cards.map(normalizeUpcomingEventModel);
         };
       }
+
+      if (contentType.includes(CONTENT_TYPES.ON_DEMAND_EVENT.MAPPING_KEY.toLowerCase())) {
+        return async () => {
+          const cards = await handleCoveoService();
+          return cards.map(normalizeOnDemandEventModel);
+        };
+      }
+      // Default to Coveo for other array content types
       return handleCoveoService;
     }
 
@@ -297,6 +355,18 @@ const BrowseCardsDelegate = (() => {
 
       cardDataService()
         .then(async (cardData) => {
+          const normalizedCardData = cardData.map((card) => {
+            // Normalize upcoming events
+            if (card.contentType?.toLowerCase() === CONTENT_TYPES.UPCOMING_EVENT_V2.MAPPING_KEY.toLowerCase()) {
+              return normalizeUpcomingEventModel(card);
+            }
+            // Normalize on-demand events
+            if (card.contentType?.toLowerCase() === CONTENT_TYPES.ON_DEMAND_EVENT.MAPPING_KEY.toLowerCase()) {
+              return normalizeOnDemandEventModel(card);
+            }
+            return card;
+          });
+
           // Enrich course data with user progress if applicable
           if (contentType?.includes(CONTENT_TYPES.COURSE.MAPPING_KEY)) {
             try {
@@ -308,7 +378,7 @@ const BrowseCardsDelegate = (() => {
                   import('./browse-cards-course-enricher.js'),
                 ]);
                 const courses = await getCurrentCourses();
-                resolve(BrowseCardsCourseEnricher.enrichCardsWithCourseStatus(cardData, courses));
+                resolve(BrowseCardsCourseEnricher.enrichCardsWithCourseStatus(normalizedCardData, courses));
                 return;
               }
             } catch (error) {
@@ -317,7 +387,7 @@ const BrowseCardsDelegate = (() => {
             }
           }
 
-          resolve(cardData);
+          resolve(normalizedCardData);
         })
         .catch((err) => {
           reject(err);

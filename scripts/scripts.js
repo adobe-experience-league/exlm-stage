@@ -431,7 +431,7 @@ export const decorateLinksWithinSection = (main) => {
 
     links?.forEach((link) => {
       const href = link.getAttribute('href');
-      if (href && !href.startsWith('#') && !link.hasAttribute('target')) {
+      if (href && !href.startsWith('#')) {
         link.setAttribute('target', '_blank');
         if (link.hostname !== window.location.hostname) {
           link.setAttribute('rel', 'noopener noreferrer');
@@ -791,6 +791,7 @@ export function getConfig() {
   const cdnHost = currentEnv?.cdn || defaultEnv.cdn;
   const communityHost = currentEnv?.community || defaultEnv.community;
   const cdnOrigin = `https://${cdnHost}`;
+  const premiumLearningAuthAPI = `${cdnOrigin}/api/v1/web/alm/authentication`;
   const lang = document.querySelector('html').lang || 'en';
   // Locale param for Community page URL
   const communityLocale = communityLangsMap.get(lang) || 'en';
@@ -829,6 +830,7 @@ export function getConfig() {
     modalReDisplayDuration,
     cookieConsentName,
     targetCriteriaIds,
+    premiumLearningAuthAPI,
     quizPassingCriteria: 0.65, // 65% passing criteria for quizzes
     khorosProfileUrl: `${cdnOrigin}/api/action/khoros/profile-menu-list?platform=gainsight`,
     khorosProfileDetailsUrl: `${cdnOrigin}/api/action/khoros/profile-details?platform=gainsight`,
@@ -840,6 +842,7 @@ export function getConfig() {
       : 'https://adobesystemsincorporatednonprod1.org.coveo.com/rest/search/v2',
     coveoOrganizationId: isProd ? 'adobev2prod9e382h1q' : 'adobesystemsincorporatednonprod1',
     upcomingEventsUrl: `${prodAssetsCdnOrigin}/thumb/upcoming-events.json`,
+    plApiBaseUrl: 'https://learningmanager.adobe.com/primeapi/v2',
     adlsUrl: 'https://learning.adobe.com/courses.result.json',
     industryUrl: `${cdnOrigin}/api/industries?page_size=200&sort=Order&lang=${lang}`,
     articleUrl: `${cdnOrigin}/api/articles`,
@@ -868,6 +871,8 @@ export function getConfig() {
     mpcApiBase: `https://api.tv.adobe.com/videos`,
     // Events Page URL
     eventsURL: `${cdnOrigin}/${lang}/events`,
+    // Premium Learning home (for premium learner nav link)
+    premiumHomeUrl: `${cdnOrigin}/${lang}/premium/home`,
   };
   return window.exlm.config;
 }
@@ -1410,58 +1415,56 @@ export function setMetadata(name, content) {
 }
 
 /**
- * Update TQ Tags metadata directly in meta tags
+ * Update TQ Tags metadata for Coveo
  * @param {Document} document
  */
 export function updateTQTagsForCoveo() {
   const keyMapping = {
-    'tq-roles': 'role',
-    'tq-levels': 'level',
-    'tq-products': 'coveo-solution',
-    'tq-features': 'feature',
-    'tq-subfeatures': 'sub-feature',
-    'tq-industries': 'industry',
-    'tq-topics': 'topic',
+    role_v2: 'role',
+    level_v2: 'level',
+    product_v2: 'coveo-solution',
+    feature_v2: 'feature',
+    subfeature_v2: 'sub-feature',
+    industry_v2: 'industry',
+    topic_v2: 'topic',
   };
 
-  Object.entries(keyMapping).forEach(([originalName, metaName]) => {
-    const metaTag = document.querySelector(`meta[name="${originalName}"]`);
-    if (!metaTag) return;
+  Object.entries(keyMapping).forEach(([sourceKey, targetKey]) => {
+    const value = getMetadata(sourceKey);
+    if (!value) return;
 
-    try {
-      const decoded = decodeHtmlEntities(metaTag.content);
-      const parsed = JSON.parse(decoded);
+    let formatted = value.trim();
 
-      if (Array.isArray(parsed)) {
-        const separator = originalName === 'tq-products' ? ';' : ',';
-        const labels = [...new Set(parsed.map((item) => item.label?.trim()).filter(Boolean))].join(separator);
-
-        if (labels) {
-          setMetadata(metaName, labels);
-        }
-      }
-    } catch (e) {
-      console.error(`Failed to parse metadata for ${originalName}:`, e, metaTag);
+    // Only product needs different separator
+    if (sourceKey === 'product_v2') {
+      formatted = formatted
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .join(';');
     }
+
+    setMetadata(targetKey, formatted);
   });
 }
 
 /**
  * Update TQ Tags metadata
+ * Converts JSON metadata -> label-only metadata
  * @param {Document} document
  */
 export function updateTQTagsMetadata() {
-  const keysToUpdate = [
-    'tq-roles',
-    'tq-levels',
-    'tq-products',
-    'tq-features',
-    'tq-subfeatures',
-    'tq-industries',
-    'tq-topics',
-  ];
+  const keyMapping = {
+    'tq-roles': 'role_v2',
+    'tq-levels': 'level_v2',
+    'tq-products': 'product_v2',
+    'tq-features': 'feature_v2',
+    'tq-subfeatures': 'subfeature_v2',
+    'tq-industries': 'industry_v2',
+    'tq-topics': 'topic_v2',
+  };
 
-  keysToUpdate.forEach((key) => {
+  Object.entries(keyMapping).forEach(([key, newKey]) => {
     const metaTag = getMetadata(key);
     if (!metaTag) return;
 
@@ -1470,24 +1473,17 @@ export function updateTQTagsMetadata() {
       const parsed = JSON.parse(decoded);
 
       if (Array.isArray(parsed)) {
-        const updatedTags = parsed
-          .map((item) => (item.uri && item.label ? `${item.uri}|${item.label}` : null))
+        const labels = parsed
+          .map((item) => item?.label)
           .filter(Boolean)
           .join(', ');
-        if (updatedTags) {
-          setMetadata(`${key}`, updatedTags);
-          // Extract labels (the part after |) and join by comma
-          const labels = updatedTags
-            .split(',')
-            .map((tag) => tag.split('|')[1]?.trim())
-            .filter(Boolean)
-            .join(', ');
 
-          setMetadata(`${key}-labels`, labels);
+        if (labels) {
+          setMetadata(newKey, labels);
         }
       }
     } catch (e) {
-      console.error(`Failed to parse metadata for ${key}:`, e);
+      console.error(`Failed to parse metadata for ${key}:`, e, metaTag);
     }
   });
 }
@@ -1669,6 +1665,19 @@ async function loadPage() {
   const containsAtomicSearch = !!document.querySelector(`main .atomic-search`);
   if (containsAtomicSearch) {
     initiateCoveoAtomicSearch();
+  }
+
+  // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
+  if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
+    try {
+      const signedIn = await isUserSignedIn();
+      if (signedIn) {
+        const { default: initializePLAuthentication } = await import('./utils/pl-auth-utils.js');
+        await initializePLAuthentication();
+      }
+    } catch (error) {
+      console.error('Error initializing Premium Learning authentication:', error);
+    }
   }
 
   if (isProfilePage) {

@@ -1,7 +1,5 @@
 .events .events-header {
   margin-bottom: 40px;
-  display: flex;
-  flex-direction: column;
 }
 
 .events .events-header-eyebrow {
@@ -14,20 +12,14 @@
 }
 
 .events .events-header-title {
-  font-size: var(--spectrum-font-size-1100);
   font-weight: var(--font-weight-heavy);
   color: var(--non-spectrum-dark-gray);
-  margin: 0 0 8px;
+  margin: 0;
   text-align: center;
-  line-height: 1.25;
 }
 
 .events .events-header-description,
-.events .events-header-description p,
-.events .events-header-description h1,
-.events .events-header-description h2,
-.events .events-header-description h3,
-.events .events-header-description h4 {
+.events .events-header-description p {
   font-size: var(--spectrum-font-size-400);
   color: var(--non-spectrum-dark-gray);
   line-height: 1.5;
@@ -129,7 +121,7 @@
 
 .events .events-featured-cta a.button {
   margin-top: 8px;
-  font-size: 17px;
+  font-size: var(--spectrum-font-size-300);
   font-weight: var(--font-weight-bold);
   margin-bottom: 0;
 }
@@ -232,5 +224,10 @@
 
   .events .events-list {
     grid-template-columns: repeat(3, 1fr);
+  }
+
+  .aim-hub .section .events-block {
+    max-width: 1062px;
+    margin: 0 auto;
   }
 }
