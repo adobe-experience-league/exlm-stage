@@ -817,6 +817,18 @@ export function getConfig() {
   else if (isStage)
     launchScriptSrc = 'https://assets.adobedtm.com/d4d114c60e50/9f881954c8dc/launch-102059c3cf0a-staging.min.js';
   else launchScriptSrc = 'https://assets.adobedtm.com/d4d114c60e50/9f881954c8dc/launch-caabfb728852-development.js';
+  let plPrivateCatalogIds;
+  let plPublicCatalogIds;
+  if (isProd) {
+    plPrivateCatalogIds = []; // TODO: update once configured in ALM
+    plPublicCatalogIds = []; // TODO: update once configured in ALM
+  } else if (isStage) {
+    plPrivateCatalogIds = ['208426'];
+    plPublicCatalogIds = ['208427'];
+  } else {
+    plPrivateCatalogIds = ['208424'];
+    plPublicCatalogIds = ['208425'];
+  }
   const signUpFlowConfigDate = '2024-08-15T00:00:00.762Z';
   const modalReDisplayDuration = '3'; // in months
 
@@ -847,6 +859,8 @@ export function getConfig() {
       : 'https://adobesystemsincorporatednonprod1.org.coveo.com/rest/search/v2',
     coveoOrganizationId: isProd ? 'adobev2prod9e382h1q' : 'adobesystemsincorporatednonprod1',
     upcomingEventsUrl: `${prodAssetsCdnOrigin}/thumb/upcoming-events.json`,
+    plPrivateCatalogIds,
+    plPublicCatalogIds,
     plApiBaseUrl: 'https://learningmanager.adobe.com/primeapi/v2',
     adlsUrl: 'https://learning.adobe.com/courses.result.json',
     industryUrl: `${cdnOrigin}/api/industries?page_size=200&sort=Order&lang=${lang}`,
@@ -1671,6 +1685,22 @@ async function loadPage() {
     return window?.adobeIMS?.isSignedInUser();
   };
 
+  /**
+   * Initializes Premium Learning authentication and checks membership status.
+   * @returns {Promise<boolean>} True if user is a PL member, false otherwise
+   */
+  const isPLMember = async () => {
+    try {
+      await window.adobeIMS?.getAccessToken();
+      const { default: initializePLAuthentication, isPremiumLearner } = await import('./utils/pl-auth-utils.js');
+      await initializePLAuthentication();
+      return isPremiumLearner();
+    } catch (error) {
+      console.error('Error checking Premium Learning status:', error);
+      return false;
+    }
+  };
+
   const loadTarget = async (isAlreadySignedIn = false) => {
     const targetSupportedPaths = ['/perspectives', '/home'];
     if (targetSupportedPaths.includes(currentPagePath)) {
@@ -1696,6 +1726,28 @@ async function loadPage() {
     } else {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
+        // Check PL membership status for signed-in users
+        const plMember = await isPLMember();
+
+        // Only fetch enrollments if user is BOTH a PL member AND on profile page
+        if (plMember && isProfilePage) {
+          const { fetchUserEnrollments } = await import('./data-service/premium-learning-data-service.js');
+          const config = getConfig();
+          const enrollmentData = await fetchUserEnrollments(config, 'learningProgram', 10);
+          const hasEnrollments = enrollmentData?.data?.length > 0;
+
+          const activeContentBlock = document.querySelector('.premium-learning-active-content');
+          const suggestedContentBlock = document.querySelector('.premium-learning-suggested-content');
+
+          if (hasEnrollments) {
+            // User has enrollments - remove suggested content block
+            suggestedContentBlock?.remove();
+          } else {
+            // User has no enrollments - remove active content block
+            activeContentBlock?.remove();
+          }
+        }
+
         loadPage();
         loadTarget(signedIn);
       } else {
@@ -1733,11 +1785,9 @@ async function loadPage() {
       const signedIn = await isUserSignedIn();
 
       if (signedIn) {
-        const { default: initializePLAuthentication, isPremiumLearner } = await import('./utils/pl-auth-utils.js');
+        const plMember = await isPLMember();
 
-        await initializePLAuthentication();
-
-        if (!isPremiumLearner()) {
+        if (!plMember) {
           removePremiumLearningSections();
         }
       } else {
