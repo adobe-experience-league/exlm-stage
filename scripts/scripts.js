@@ -169,6 +169,11 @@ export const isSignUpPage = matchesAnyTheme(/^signup.*/);
 export const isCourseStep = matchesAnyTheme(/course-step/);
 export const isOnDemandEventPage = matchesAnyTheme(/on-demand-event/);
 export const isLiveGradientBgPage = matchesAnyTheme(/page-bg-gradient/);
+export const isHomePage = (() => {
+  const { pathname } = window.location;
+  const lang = document.querySelector('html').lang || 'en';
+  return pathname === '/' || pathname === `/${lang}` || pathname === `/${lang}/`;
+})();
 
 export const isCertificatePage = () => !!document.querySelector('.course-completion'); // Checking for presence of course-completion block
 
@@ -812,6 +817,18 @@ export function getConfig() {
   else if (isStage)
     launchScriptSrc = 'https://assets.adobedtm.com/d4d114c60e50/9f881954c8dc/launch-102059c3cf0a-staging.min.js';
   else launchScriptSrc = 'https://assets.adobedtm.com/d4d114c60e50/9f881954c8dc/launch-caabfb728852-development.js';
+  let plPrivateCatalogIds;
+  let plPublicCatalogIds;
+  if (isProd) {
+    plPrivateCatalogIds = []; // TODO: update once configured in ALM
+    plPublicCatalogIds = []; // TODO: update once configured in ALM
+  } else if (isStage) {
+    plPrivateCatalogIds = ['208426'];
+    plPublicCatalogIds = ['208427'];
+  } else {
+    plPrivateCatalogIds = ['208424'];
+    plPublicCatalogIds = ['208425'];
+  }
   const signUpFlowConfigDate = '2024-08-15T00:00:00.762Z';
   const modalReDisplayDuration = '3'; // in months
 
@@ -842,6 +859,8 @@ export function getConfig() {
       : 'https://adobesystemsincorporatednonprod1.org.coveo.com/rest/search/v2',
     coveoOrganizationId: isProd ? 'adobev2prod9e382h1q' : 'adobesystemsincorporatednonprod1',
     upcomingEventsUrl: `${prodAssetsCdnOrigin}/thumb/upcoming-events.json`,
+    plPrivateCatalogIds,
+    plPublicCatalogIds,
     plApiBaseUrl: 'https://learningmanager.adobe.com/primeapi/v2',
     adlsUrl: 'https://learning.adobe.com/courses.result.json',
     industryUrl: `${cdnOrigin}/api/industries?page_size=200&sort=Order&lang=${lang}`,
@@ -873,6 +892,14 @@ export function getConfig() {
     eventsURL: `${cdnOrigin}/${lang}/events`,
     // Premium Learning home (for premium learner nav link)
     premiumHomeUrl: `${cdnOrigin}/${lang}/premium/home`,
+    // Brand Concierge
+    bcDatastreamId: '87ae6de9-a49c-4734-a88a-17ec707ded09',
+    bcOrgId: 'E4722728699EC56A0A495CA2@AdobeOrg',
+    bcAlloySdkUrl: 'https://cdn1.adoberesources.net/alloy/2.31.1/alloy.min.js',
+    bcWebClientUrl:
+      'https://experience.adobe.net/solutions/experience-platform-brand-concierge-web-agent/static-assets/main.js',
+    bcEdgeDomain: 'edge.adobedc.net',
+    bcAuthRequired: true,
   };
   return window.exlm.config;
 }
@@ -954,7 +981,7 @@ const loadMartech = async (headerPromise, footerPromise) => {
   // eslint-disable-next-line import/no-cycle
   const libAnalyticsPromise = import('./analytics/lib-analytics.js');
   libAnalyticsPromise.then(async (libAnalyticsModule) => {
-    const { pushPageDataLayer, pushLinkClick, setupComponentImpressions } = libAnalyticsModule;
+    const { pushPageDataLayer, pushLinkClick, handleComponentClick, setupComponentImpressions } = libAnalyticsModule;
     const { lang } = getPathDetails();
 
     try {
@@ -974,9 +1001,23 @@ const loadMartech = async (headerPromise, footerPromise) => {
     Promise.allSettled([headerPromise, footerPromise]).then(() => {
       const linkClicked = document.querySelectorAll('a,.view-more-less span, .language-selector-popover span');
       const clickHandler = (e) => {
-        if (e.target.tagName === 'A' || e.target.tagName === 'SPAN') pushLinkClick(e);
+        if (e.target.tagName === 'A' || e.target.tagName === 'SPAN') {
+          // Check if click is within a component (block)
+          const component = e.target.closest('[data-block-name]');
+          if (component) {
+            // Fire componentClick for block clicks
+            handleComponentClick(e);
+          } else {
+            // Fire linkClick for non-component clicks (header, footer, text links, etc)
+            pushLinkClick(e);
+          }
+        }
       };
       linkClicked.forEach((e) => e.addEventListener('click', clickHandler));
+      const headerEl = document.querySelector('exl-header');
+      headerEl?.shadowRoot?.addEventListener('click', clickHandler);
+      const footerEl = document.querySelector('exl-footer');
+      footerEl?.shadowRoot?.addEventListener('click', clickHandler);
     });
   });
 
@@ -1489,6 +1530,34 @@ export function updateTQTagsMetadata() {
 }
 
 /**
+ * Extracts and returns a comma-separated string of label values from a JSON-encoded tag string.
+ * @param {string} tag - A JSON string (possibly HTML-encoded) representing an array of objects with `label` properties.
+ * @returns {string} A comma-separated string of labels, or an empty string if parsing fails or input is invalid.
+ */
+export function getv2TagLabels(tag) {
+  if (!tag) return '';
+
+  let labels = '';
+
+  try {
+    const decoded = decodeHtmlEntities(tag);
+    const parsed = JSON.parse(decoded);
+
+    if (Array.isArray(parsed)) {
+      labels = parsed
+        .map((item) => item?.label)
+        .filter(Boolean)
+        .join(', ');
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('Failed to parse tag:', e, tag);
+  }
+
+  return labels;
+}
+
+/**
  * Fetch Json with fallback.
  */
 export async function fetchJson(url, fallbackUrl) {
@@ -1616,6 +1685,38 @@ async function loadPage() {
     return window?.adobeIMS?.isSignedInUser();
   };
 
+  /**
+   * Resolves with fallback if the promise does not settle in time (e.g. hung PL API).
+   * @template T
+   * @param {Promise<T>} promise
+   * @param {number} ms
+   * @param {T} fallback
+   * @returns {Promise<T>}
+   */
+  const withTimeout = (promise, ms, fallback) =>
+    Promise.race([
+      promise,
+      new Promise((resolve) => {
+        setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+
+  /**
+   * Initializes Premium Learning authentication and checks membership status.
+   * @returns {Promise<boolean>} True if user is a PL member, false otherwise
+   */
+  const isPLMember = async () => {
+    try {
+      await window.adobeIMS?.getAccessToken();
+      const { default: initializePLAuthentication, isPremiumLearner } = await import('./utils/pl-auth-utils.js');
+      await initializePLAuthentication();
+      return isPremiumLearner();
+    } catch (error) {
+      console.error('Error checking Premium Learning status:', error);
+      return false;
+    }
+  };
+
   const loadTarget = async (isAlreadySignedIn = false) => {
     const targetSupportedPaths = ['/perspectives', '/home'];
     if (targetSupportedPaths.includes(currentPagePath)) {
@@ -1641,6 +1742,28 @@ async function loadPage() {
     } else {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
+        // Check PL membership status for signed-in users
+        const plMember = await withTimeout(isPLMember(), 10000, false);
+
+        // Only fetch enrollments if user is BOTH a PL member AND on profile page
+        if (plMember && isProfilePage) {
+          const { fetchUserEnrollments } = await import('./data-service/premium-learning-data-service.js');
+          const config = getConfig();
+          const enrollmentData = await fetchUserEnrollments(config, 'learningProgram', 10);
+          const hasEnrollments = enrollmentData?.data?.length > 0;
+
+          const activeContentBlock = document.querySelector('.premium-learning-active-content');
+          const suggestedContentBlock = document.querySelector('.premium-learning-suggested-content');
+
+          if (hasEnrollments) {
+            // User has enrollments - remove suggested content block
+            suggestedContentBlock?.remove();
+          } else {
+            // User has no enrollments - remove active content block
+            activeContentBlock?.remove();
+          }
+        }
+
         loadPage();
         loadTarget(signedIn);
       } else {
@@ -1669,14 +1792,26 @@ async function loadPage() {
 
   // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
   if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
+    // Helper function to remove premium learning sections
+    const removePremiumLearningSections = () => {
+      document.querySelectorAll('.premium-learning-section').forEach((section) => section.remove());
+    };
+
     try {
       const signedIn = await isUserSignedIn();
+
       if (signedIn) {
-        const { default: initializePLAuthentication } = await import('./utils/pl-auth-utils.js');
-        await initializePLAuthentication();
+        const plMember = await withTimeout(isPLMember(), 10000, false);
+
+        if (!plMember) {
+          removePremiumLearningSections();
+        }
+      } else {
+        removePremiumLearningSections();
       }
     } catch (error) {
       console.error('Error initializing Premium Learning authentication:', error);
+      removePremiumLearningSections();
     }
   }
 
