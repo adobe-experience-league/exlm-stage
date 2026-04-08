@@ -33,6 +33,11 @@
   pointer-events: none;
 }
 
+.page-bg-gradient main > :not(.gradient-layer) {
+  position: relative;
+  z-index: 1;
+}
+
 /* Shared circle styles */
 .page-bg-gradient .gradient-layer > .gradient-circle {
   position: absolute;
