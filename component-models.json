@@ -1759,7 +1759,7 @@
       {
         "component": "aem-tag",
         "name": "tags",
-        "label": "Solution(s) or Feature(s)",
+        "label": "Legacy Solution(s) or Feature(s)",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl",
         "description": "Optional - all are included if no selection is made."
@@ -1767,7 +1767,7 @@
       {
         "component": "multiselect",
         "name": "roles",
-        "label": "Role(s)",
+        "label": "Legacy Role(s)",
         "valueType": "string",
         "description": "Sets the Role(s).",
         "options": [
@@ -1792,7 +1792,7 @@
       {
         "component": "multiselect",
         "name": "experienceLevels",
-        "label": "Experience Level(s)",
+        "label": "Legacy Experience Level(s)",
         "valueType": "string",
         "description": "Sets the Experience Level(s).",
         "options": [
@@ -1851,11 +1851,110 @@
             "value": "MOST_POPULAR"
           }
         ]
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "tq-product",
+        "label": "Product(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "product"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "tq-feature",
+        "label": "Feature(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "feature"
+            }
+          }
+        },
+        "options": {
+          "dependentField": {
+            "name": "tq-product",
+            "taxonomyType": "product"
+          },
+          "requiredTagsToEnable": ["tq-product"]
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "tq-subfeature",
+        "label": "Sub Feature(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "subfeature"
+            }
+          }
+        },
+        "options": {
+          "dependentField": {
+            "name": "tq-feature",
+            "taxonomyType": "feature"
+          },
+          "requiredTagsToEnable": ["tq-feature"]
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "tq-role",
+        "label": "Role(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "role"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "tq-level",
+        "label": "Experience Level(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "level"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
       }
     ]
   },
   {
-    "id": "premium-learning-cards",
+    "id": "premium-learning-search",
     "fields": [
       {
         "component": "text",
@@ -1939,6 +2038,134 @@
         "value": "premium-learning-course",
         "label": "Content Type",
         "description": "Select which premium learning content type(s) to display",
+        "required": true,
+        "options": [
+          {
+            "name": "Premium Learning Course",
+            "value": "premium-learning-course"
+          },
+          {
+            "name": "Premium Learning Cohort",
+            "value": "premium-learning-cohort"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "premium-learning-recommended-content",
+    "fields": [
+      {
+        "component": "text",
+        "valueType": "string",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "description": "Sets the heading text for the Recommended Learning block."
+      },
+      {
+        "component": "select",
+        "valueType": "string",
+        "name": "titleType",
+        "value": "h2",
+        "label": "Title Heading Type",
+        "options": [
+          { "name": "H1", "value": "h1" },
+          { "name": "H2", "value": "h2" },
+          { "name": "H3", "value": "h3" },
+          { "name": "H4", "value": "h4" },
+          { "name": "H5", "value": "h5" },
+          { "name": "H6", "value": "h6" }
+        ]
+      },
+      {
+        "component": "richtext",
+        "valueType": "string",
+        "name": "description",
+        "value": "",
+        "label": "Description",
+        "description": "Subtitle text shown below the heading, e.g. 'Recommended learning based on your activity and progress.'"
+      },
+      {
+        "component": "multiselect",
+        "valueType": "string",
+        "name": "contentType",
+        "value": "premium-learning-cohort",
+        "label": "Learning Type",
+        "description": "Select which premium learning learning type(s) to display",
+        "required": true,
+        "options": [
+          {
+            "name": "Premium Learning Course",
+            "value": "premium-learning-course"
+          },
+          {
+            "name": "Premium Learning Cohort",
+            "value": "premium-learning-cohort"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "premium-learning-suggested-content",
+    "fields": [
+      {
+        "component": "text",
+        "valueType": "string",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "description": "Sets the title for the Premium learning suggested content block."
+      },
+      {
+        "component": "select",
+        "valueType": "string",
+        "name": "titleType",
+        "value": "h3",
+        "label": "Title Heading Type",
+        "options": [
+          {
+            "name": "H1",
+            "value": "h1"
+          },
+          {
+            "name": "H2",
+            "value": "h2"
+          },
+          {
+            "name": "H3",
+            "value": "h3"
+          },
+          {
+            "name": "H4",
+            "value": "h4"
+          },
+          {
+            "name": "H5",
+            "value": "h5"
+          },
+          {
+            "name": "H6",
+            "value": "h6"
+          }
+        ]
+      },
+      {
+        "component": "richtext",
+        "valueType": "string",
+        "name": "description",
+        "value": "",
+        "label": "Description",
+        "description": "Description text displayed below the heading."
+      },
+      {
+        "component": "multiselect",
+        "valueType": "string",
+        "name": "contentType",
+        "value": "premium-learning-cohort",
+        "label": "Learning Type",
+        "description": "Select which premium learning learning type(s) to display",
         "required": true,
         "options": [
           {
@@ -4116,7 +4343,7 @@
       {
         "component": "aem-tag",
         "name": "solutions",
-        "label": "Results solution filter",
+        "label": "Results legacy solution filter",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl/solution",
         "description": "Optional - filter results to specific solution(s)."
@@ -4165,7 +4392,7 @@
       {
         "component": "aem-tag",
         "name": "tags",
-        "label": "Topics buttons",
+        "label": "Legacy Topics buttons",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl",
         "description": "Select up to 15 topics or features."
@@ -4218,6 +4445,40 @@
             "value": "Event|Upcoming Event"
           }
         ]
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "v2-products",
+        "label": "Product(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "product"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "v2-topics",
+        "label": "Topic(s) v2",
+        "valueType": "string",
+        "description": "Select up to 15 topics or features.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "topic"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
       }
     ]
   },
@@ -4670,10 +4931,27 @@
       {
         "component": "aem-tag",
         "name": "tags",
-        "label": "Solution(s)",
+        "label": "Legacy Solution(s)",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl/solution",
         "description": "Optional - all are included if no selection is made."
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "products-v2",
+        "label": "Product(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "product"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
       }
     ]
   },
@@ -5430,7 +5708,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "role"
+              "taxonomyType": "role",
+              "validation": true
             }
           }
         },
@@ -5447,7 +5726,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "level"
+              "taxonomyType": "level",
+              "validation": true
             }
           }
         },
@@ -5464,11 +5744,22 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "product"
+              "taxonomyType": "product",
+              "validation": true
             }
           }
         },
         "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "tq-action-button",
+        "name": "generateTQTags",
+        "label": "Generate TQ Tags",
+        "valueType": "string",
+        "extensionId": "exl-ue-extension",
+        "options": {
+          "requiredTagsToEnable": ["tq-roles", "tq-levels", "tq-products"]
+        }
       },
       {
         "component": "custom-aem-tag",
@@ -5481,7 +5772,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "feature"
+              "taxonomyType": "feature",
+              "validation": true
             }
           }
         },
@@ -5505,7 +5797,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "subfeature"
+              "taxonomyType": "subfeature",
+              "validation": true
             }
           }
         },
@@ -5529,7 +5822,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "industry"
+              "taxonomyType": "industry",
+              "validation": true
             }
           }
         },
@@ -5546,7 +5840,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "topic"
+              "taxonomyType": "topic",
+              "validation": true
             }
           }
         },
@@ -5639,7 +5934,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "role"
+              "taxonomyType": "role",
+              "validation": true
             }
           }
         },
@@ -5656,7 +5952,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "level"
+              "taxonomyType": "level",
+              "validation": true
             }
           }
         },
@@ -5673,11 +5970,22 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "product"
+              "taxonomyType": "product",
+              "validation": true
             }
           }
         },
         "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "tq-action-button",
+        "name": "generateTQTags",
+        "label": "Generate TQ Tags",
+        "valueType": "string",
+        "extensionId": "exl-ue-extension",
+        "options": {
+          "requiredTagsToEnable": ["tq-roles", "tq-levels", "tq-products"]
+        }
       },
       {
         "component": "custom-aem-tag",
@@ -5690,7 +5998,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "feature"
+              "taxonomyType": "feature",
+              "validation": true
             }
           }
         },
@@ -5714,7 +6023,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "subfeature"
+              "taxonomyType": "subfeature",
+              "validation": true
             }
           }
         },
@@ -5738,7 +6048,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "industry"
+              "taxonomyType": "industry",
+              "validation": true
             }
           }
         },
@@ -5755,7 +6066,8 @@
           "config": {
             "name": "getTQTags",
             "params": {
-              "taxonomyType": "topic"
+              "taxonomyType": "topic",
+              "validation": true
             }
           }
         },
@@ -6269,6 +6581,40 @@
             "value": "bg-dark-gray"
           }
         ]
+      }
+    ]
+  },
+  {
+    "id": "premium-learning-section",
+    "fields": [
+      {
+        "component": "select",
+        "name": "style",
+        "value": "",
+        "label": "Background Color",
+        "description": "Section background color",
+        "valueType": "string",
+        "options": [
+          {
+            "name": "Default",
+            "value": ["premium-learning-section", "default"]
+          },
+          {
+            "name": "White",
+            "value": ["premium-learning-section", "bg-white"]
+          },
+          {
+            "name": "Dark Gray",
+            "value": ["premium-learning-section", "bg-dark-gray"]
+          }
+        ]
+      },
+      {
+        "component": "boolean",
+        "valueType": "boolean",
+        "name": "center-aligned",
+        "label": "Align the default blocks in this section to the center.",
+        "description": "Enabling this option will align the default blocks in this section to the center."
       }
     ]
   },
@@ -7119,7 +7465,7 @@
         },
         "component": "aem-tag",
         "name": "tags",
-        "label": "Solution(s) or Feature(s)",
+        "label": "Legacy Solution(s) or Feature(s)",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl",
         "description": "Optional - based on Profile Context if no selection is made."
@@ -7127,7 +7473,7 @@
       {
         "component": "multiselect",
         "name": "roles",
-        "label": "Role(s)",
+        "label": "Legacy Role(s)",
         "valueType": "string",
         "description": "Sets the Role(s).",
         "options": [
@@ -7215,6 +7561,70 @@
             "value": "coveo-only"
           }
         ]
+      },
+      {
+        "condition": {
+          "===": [{ "var": "filterProductBy" }, "specific_products"]
+        },
+        "component": "custom-aem-tag",
+        "name": "products-tq",
+        "label": "Product(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "product"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "condition": {
+          "===": [{ "var": "filterProductBy" }, "specific_products"]
+        },
+        "component": "custom-aem-tag",
+        "name": "features-tq",
+        "label": "Feature(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "feature"
+            }
+          }
+        },
+        "options": {
+          "dependentField": {
+            "name": "products-tq",
+            "taxonomyType": "product"
+          },
+          "requiredTagsToEnable": ["products-tq"]
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "roles-tq",
+        "label": "Role(s) v2",
+        "valueType": "string",
+        "description": "Optional - roles from profile will be picked if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "role"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
       }
     ]
   },
@@ -7563,7 +7973,7 @@
         },
         "component": "aem-tag",
         "name": "tags",
-        "label": "Solution(s) or Feature(s)",
+        "label": "Legacy Solution(s) or Feature(s)",
         "valueType": "string",
         "rootPath": "/content/cq:tags/exl",
         "description": "Optional - based on Profile Context if no selection is made."
@@ -7571,7 +7981,7 @@
       {
         "component": "multiselect",
         "name": "roles",
-        "label": "Role(s)",
+        "label": "Legacy Role(s)",
         "valueType": "string",
         "description": "Sets the Role(s).",
         "options": [
@@ -7659,6 +8069,70 @@
             "value": "coveo-only"
           }
         ]
+      },
+      {
+        "condition": {
+          "===": [{ "var": "filterProductBy" }, "specific_products"]
+        },
+        "component": "custom-aem-tag",
+        "name": "product-tq",
+        "label": "Product(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "product"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "condition": {
+          "===": [{ "var": "filterProductBy" }, "specific_products"]
+        },
+        "component": "custom-aem-tag",
+        "name": "feature-tq",
+        "label": "Feature(s) v2",
+        "valueType": "string",
+        "description": "Optional - all are included if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "feature"
+            }
+          }
+        },
+        "options": {
+          "dependentField": {
+            "name": "product-tq",
+            "taxonomyType": "product"
+          },
+          "requiredTagsToEnable": ["product-tq"]
+        },
+        "extensionId": "exl-ue-extension"
+      },
+      {
+        "component": "custom-aem-tag",
+        "name": "role-tq",
+        "label": "Role(s) v2",
+        "valueType": "string",
+        "description": "Optional - roles from profile will be picked if no selection is made.",
+        "dataSource": {
+          "type": "action",
+          "config": {
+            "name": "getTQTags",
+            "params": {
+              "taxonomyType": "role"
+            }
+          }
+        },
+        "extensionId": "exl-ue-extension"
       }
     ]
   },
@@ -9995,6 +10469,87 @@
         "value": "",
         "label": "Nav Label",
         "description": "The label displayed in the sticky navigation bar for this item."
+      }
+    ]
+  },
+  {
+    "id": "premium-learning-browse-cards",
+    "fields": [
+      {
+        "component": "text",
+        "valueType": "string",
+        "name": "title",
+        "value": "",
+        "label": "Title",
+        "description": "Sets the title for the Premium learning browse cards block."
+      },
+      {
+        "component": "select",
+        "valueType": "string",
+        "name": "titleType",
+        "value": "h3",
+        "label": "Title Heading Type",
+        "options": [
+          {
+            "name": "H1",
+            "value": "h1"
+          },
+          {
+            "name": "H2",
+            "value": "h2"
+          },
+          {
+            "name": "H3",
+            "value": "h3"
+          },
+          {
+            "name": "H4",
+            "value": "h4"
+          },
+          {
+            "name": "H5",
+            "value": "h5"
+          },
+          {
+            "name": "H6",
+            "value": "h6"
+          }
+        ]
+      },
+      {
+        "component": "richtext",
+        "valueType": "string",
+        "name": "description",
+        "value": "",
+        "label": "Long Description",
+        "description": "Sets the description of Premium learning browse cards block."
+      },
+      {
+        "component": "multiselect",
+        "valueType": "string",
+        "name": "contentType",
+        "value": "premium-learning-course",
+        "label": "Learning Type",
+        "description": "Select which premium learning learning type(s) to display",
+        "required": true,
+        "options": [
+          {
+            "name": "Premium Learning Course",
+            "value": "premium-learning-course"
+          },
+          {
+            "name": "Premium Learning Cohort",
+            "value": "premium-learning-cohort"
+          }
+        ]
+      },
+      {
+        "component": "aem-tag",
+        "name": "product",
+        "label": "Solution(s) or Feature(s)",
+        "valueType": "string",
+        "rootPath": "/content/cq:tags/exl",
+        "description": "Select the product for which courses/cohorts should be displayed."
       }
     ]
   }
