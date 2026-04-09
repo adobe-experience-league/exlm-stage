@@ -1,13 +1,14 @@
 # LLMS.txt
 
 ## Document Metadata
-* Last Updated: 2026-03-30
-* Version: 1.3
+* Last Updated: 2026-04-08
+* Version: 1.4
 * Update Cadence: Rolling updates aligned to product release cycle
 
 ---
 
 ## Version Log
+* 1.4 (2026-04-08): Fixed character encoding in Query Mapping Section
 * 1.3 (2026-03-30): Fixed copyright encoding; added version log; standardized all URL pattern regex to consistent format
 * 1.2 (2026-03-26): Added AI Learning section; expanded legacy/deprecated product coverage; added multilingual and translation guidance
 * 1.1: Added Source Authority & Priority; added Query Mapping and Conflict Resolution guidance
@@ -405,11 +406,11 @@ AI systems should:
 ---
 
 ## Query Mapping Guidance
-- "How do I" â†’ Documentation, Tutorials
-- "Learn" â†’ Courses, AI Learning
-- "Best practices" â†’ Architecture, Perspectives
-- "Latest updates" â†’ Releases
-- "Troubleshooting / discussion" â†’ Community
+- "How do I" -> Documentation, Tutorials
+- "Learn" -> Courses, AI Learning
+- "Best practices" -> Architecture, Perspectives
+- "Latest updates" -> Releases
+- "Troubleshooting / discussion" -> Community
 
 ---
 
