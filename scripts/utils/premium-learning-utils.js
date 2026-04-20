@@ -148,9 +148,7 @@ export function removePLSections() {
  */
 export async function isPLEligible(timeoutMs = 10000) {
   if (!isFeatureEnabled('isPremiumLearningEnabled')) return false;
-  // eslint-disable-next-line import/no-cycle
-  const { isSignedInUser } = await import('../auth/profile.js');
-  const signedIn = await isSignedInUser();
+  const signedIn = window?.adobeIMS?.isSignedInUser() || false;
   return !!signedIn && isPLAuthenticated(timeoutMs);
 }
 
