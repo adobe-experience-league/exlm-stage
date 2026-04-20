@@ -53,13 +53,13 @@ export function copyHandler(config) {
           if (tooltip?.copyToastText) {
             sendNotice(tooltip.copyToastText);
           }
+          callback(linkType, position);
         })
         .catch((err) => {
           /* eslint-disable-next-line no-console */
           console.error('Error copying link to clipboard:', err);
         });
     }
-    if (callback) callback(linkType, position);
   }
 }
 

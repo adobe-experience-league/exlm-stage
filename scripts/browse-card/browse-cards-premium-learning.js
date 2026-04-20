@@ -317,7 +317,7 @@ export async function buildPLCard(element, model) {
 
     // Prevent navigation when clicking user actions
     cardContainer.addEventListener('click', (e) => {
-      if (e.target.closest('.user-actions')) {
+      if (e.target?.closest('.user-actions')) {
         e.preventDefault();
       }
     });
@@ -337,7 +337,7 @@ export async function buildPLCard(element, model) {
       card.dataset.cardPosition = cardPosition || '';
     }
 
-    if (e.target.closest('.user-actions')) {
+    if (e.target?.closest('.user-actions')) {
       return;
     }
 
