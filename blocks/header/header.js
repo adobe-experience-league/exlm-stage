@@ -14,7 +14,7 @@ import {
   fetchLanguagePlaceholders,
 } from '../../scripts/scripts.js';
 import getProducts from '../../scripts/utils/product-utils.js';
-import { isPremiumLearner } from '../../scripts/utils/pl-auth-utils.js';
+import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import {
   decoratorState,
   isMobile,
@@ -413,18 +413,32 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   const ul = navWrapper.querySelector(':scope > ul');
   buildNavItems(ul);
 
-  if (isPremiumLearner()) {
-    const placeholders = decoratorOptions.placeholders ?? {};
-    const premiumLearningLabel = placeholders?.premiumLearningHeaderLabel || 'Premium Learning';
-    const { premiumHomeUrl } = getConfig();
-    ul.appendChild(
-      htmlToElement(
-        `<li class="nav-item nav-item-root nav-item-leaf">
-          <a href="${premiumHomeUrl}" title="${premiumLearningLabel}">${premiumLearningLabel}</a>
-        </li>`,
-      ),
-    );
-  }
+  // Reserve a slot for the PL nav link before featured products are built,
+  // so position is stable regardless of when the async membership check resolves.
+  const plNavPlaceholder = document.createElement('li');
+  ul.appendChild(plNavPlaceholder);
+  isPLEligible()
+    .then((isMember) => {
+      if (isMember) {
+        const placeholders = decoratorOptions.placeholders ?? {};
+        const premiumLearningLabel = placeholders?.premiumLearningHeaderLabel || 'Premium Learning';
+        const { premiumHomeUrl } = getConfig();
+        plNavPlaceholder.replaceWith(
+          htmlToElement(
+            `<li class="nav-item nav-item-root nav-item-leaf">
+              <a href="${premiumHomeUrl}" title="${premiumLearningLabel}">${premiumLearningLabel}</a>
+            </li>`,
+          ),
+        );
+      } else {
+        plNavPlaceholder.remove();
+      }
+    })
+    .catch((err) => {
+      plNavPlaceholder.remove();
+      /* eslint-disable-next-line no-console */
+      console.error('Error checking Premium Learning membership in header:', err);
+    });
 
   // build featured products nav links
   buildFeaturedProductsNavLinks(navBlock, decoratorOptions.lang).then(() => {

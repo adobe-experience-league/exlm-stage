@@ -1,14 +1,21 @@
 /* eslint-disable no-use-before-define */
-import { htmlToElement } from '../../scripts/scripts.js';
+import { htmlToElement, createTag } from '../../scripts/scripts.js';
 import { buildPLCard } from '../../scripts/browse-card/browse-cards-premium-learning.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
-import { getPLAccessToken } from '../../scripts/utils/pl-auth-utils.js';
+import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import { fetchPremiumLearningBookmarks } from '../../scripts/user-actions/bookmark.js';
 import getEmitter from '../../scripts/events.js';
 import PL_CONTENT_TYPES from '../../scripts/data-service/premium-learning/premium-learning-constants.js';
 import BrowseCardsPLAdaptor from '../../scripts/browse-card/browse-cards-premium-learning-adaptor.js';
 
+const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 const bookmarksEventEmitter = getEmitter('pl-bookmarks');
+
+function showFallbackContentInUEMode(blockElement) {
+  const contentDiv = createTag('div', { class: 'browse-cards-block-content' });
+  contentDiv.textContent = 'This block will load Premium Learning bookmarks for eligible users only.';
+  blockElement.appendChild(contentDiv);
+}
 const SHIMMER_COUNT = 4;
 const BATCH_SIZE = 6;
 
@@ -85,8 +92,14 @@ export default async function decorate(block) {
 
   block.appendChild(content);
 
-  // Check if user has PL access token
-  if (!getPLAccessToken()) return;
+  // Use shared eligibility gating instead of token-only checks to avoid auth timing races
+  // where the token may not be set yet even for an eligible signed-in premium user.
+  const isEligible = await isPLEligible();
+  if (!isEligible) {
+    if (UEAuthorMode) showFallbackContentInUEMode(block);
+    else block.remove();
+    return;
+  }
 
   // Trigger shimmer immediately by calling renderCards with empty array
   renderCards(block, []).catch(() => {});

@@ -1724,40 +1724,7 @@ async function loadPage() {
     return window?.adobeIMS?.isSignedInUser();
   };
 
-  /**
-   * Resolves with fallback if the promise does not settle in time (e.g. hung PL API).
-   * @template T
-   * @param {Promise<T>} promise
-   * @param {number} ms
-   * @param {T} fallback
-   * @returns {Promise<T>}
-   */
-  const withTimeout = (promise, ms, fallback) =>
-    Promise.race([
-      promise,
-      new Promise((resolve) => {
-        setTimeout(() => resolve(fallback), ms);
-      }),
-    ]);
-
-  /**
-   * Initializes Premium Learning authentication and checks membership status.
-   * @returns {Promise<boolean>} True if user is a PL member, false otherwise
-   */
-  const isPLMember = async () => {
-    if (!isFeatureEnabled('isPremiumLearningEnabled')) {
-      return false;
-    }
-    try {
-      await window.adobeIMS?.getAccessToken();
-      const { default: initializePLAuthentication, isPremiumLearner } = await import('./utils/pl-auth-utils.js');
-      await initializePLAuthentication();
-      return isPremiumLearner();
-    } catch (error) {
-      console.error('Error checking Premium Learning status:', error);
-      return false;
-    }
-  };
+  const getPLUtils = async () => import('./utils/premium-learning-utils.js');
 
   const loadTarget = async (isAlreadySignedIn = false) => {
     const targetSupportedPaths = ['/perspectives', '/home'];
@@ -1784,27 +1751,33 @@ async function loadPage() {
     } else {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
-        // Check PL membership status for signed-in users
-        const plMember = await withTimeout(isPLMember(), 10000, false);
+        const { isPLEligible } = await getPLUtils();
 
-        // Only fetch enrollments if user is BOTH a PL member AND on profile page
-        if (plMember && isProfilePage) {
-          const { fetchUserEnrollments } = await import('./data-service/premium-learning-data-service.js');
-          const config = getConfig();
-          const enrollmentData = await fetchUserEnrollments(config, 'learningProgram', 10);
-          const hasEnrollments = enrollmentData?.data?.length > 0;
+        // Non-blocking — timeout is handled inside isPLEligible().
+        isPLEligible()
+          .then(async (plMember) => {
+            // Only fetch enrollments if user is BOTH a PL member AND on profile page
+            if (plMember && isProfilePage) {
+              const { fetchUserEnrollments } = await import('./data-service/premium-learning-data-service.js');
+              const config = getConfig();
+              const enrollmentData = await fetchUserEnrollments(config, 'learningProgram', 10);
+              const hasEnrollments = enrollmentData?.data?.length > 0;
 
-          const activeContentBlock = document.querySelector('.premium-learning-active-content');
-          const suggestedContentBlock = document.querySelector('.premium-learning-suggested-content');
+              const activeContentBlock = document.querySelector('.premium-learning-active-content');
+              const suggestedContentBlock = document.querySelector('.premium-learning-suggested-content');
 
-          if (hasEnrollments) {
-            // User has enrollments - remove suggested content block
-            suggestedContentBlock?.remove();
-          } else {
-            // User has no enrollments - remove active content block
-            activeContentBlock?.remove();
-          }
-        }
+              if (hasEnrollments) {
+                // User has enrollments - remove suggested content block
+                suggestedContentBlock?.remove();
+              } else {
+                // User has no enrollments - remove active content block
+                activeContentBlock?.remove();
+              }
+            }
+          })
+          .catch((error) => {
+            console.error('Error resolving Premium Learning membership:', error);
+          });
 
         loadPage();
         loadTarget(signedIn);
@@ -1833,27 +1806,16 @@ async function loadPage() {
   }
 
   // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
-  if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
-    // Helper function to remove premium learning sections
-    const removePremiumLearningSections = () => {
-      document.querySelectorAll('.premium-learning-section').forEach((section) => section.remove());
-    };
-
+  if (!window.hlx.aemRoot && !window.location.href.includes('.html')) {
     try {
-      const signedIn = await isUserSignedIn();
-
-      if (signedIn) {
-        const plMember = await withTimeout(isPLMember(), 10000, false);
-
-        if (!plMember) {
-          removePremiumLearningSections();
-        }
-      } else {
-        removePremiumLearningSections();
-      }
+      // Start PL auth in parallel and gate premium sections with timeout fallback.
+      const { applyPLSectionGating } = await getPLUtils();
+      // eslint-disable-next-line no-void
+      void applyPLSectionGating();
     } catch (error) {
       console.error('Error initializing Premium Learning authentication:', error);
-      removePremiumLearningSections();
+      const { removePLSections } = await getPLUtils();
+      removePLSections();
     }
   }
 

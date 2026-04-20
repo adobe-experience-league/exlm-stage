@@ -5,7 +5,7 @@ import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
 import { COVEO_SEARCH_CUSTOM_EVENTS } from '../../scripts/search/search-utils.js';
-import { isSignedInUser } from '../../scripts/auth/profile.js';
+import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 
 const isSearchPage = getMetadata('theme')?.includes('search') || false;
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
@@ -86,12 +86,14 @@ export default async function decorate(block) {
   ctaWrapper.innerHTML = decorateCustomButtons(ctaElement);
   headerCtaSlot.appendChild(ctaWrapper);
 
-  const [signInUser, placeholders] = await Promise.all([
-    isSignedInUser(),
+  const [isEligible, placeholders] = await Promise.all([
+    // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
+    // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
+    isPLEligible(),
     fetchLanguagePlaceholders().catch(() => ({})),
   ]);
 
-  if (!signInUser) {
+  if (!isEligible) {
     if (UEAuthorMode) {
       showFallbackContentInUEMode(block);
     } else {

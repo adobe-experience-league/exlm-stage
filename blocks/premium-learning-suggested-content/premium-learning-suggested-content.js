@@ -4,10 +4,10 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import { createTag, fetchLanguagePlaceholders, htmlToElement } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
-import { isSignedInUser } from '../../scripts/auth/profile.js';
+import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 
-const UE_AUTHOR_MODE = window.hlx.aemRoot || window.location.href.includes('.html');
+const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 const FETCH_LIMIT = 4;
 
 function parseAuthoredContent(block) {
@@ -214,13 +214,15 @@ export default async function decorate(block) {
     ctaMarkup,
   );
 
-  const [signInUser, placeholders] = await Promise.all([
-    isSignedInUser(),
+  const [isEligible, placeholders] = await Promise.all([
+    // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
+    // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
+    isPLEligible(),
     fetchLanguagePlaceholders().catch(() => ({})),
   ]);
 
-  if (!signInUser) {
-    if (UE_AUTHOR_MODE) {
+  if (!isEligible) {
+    if (UEAuthorMode) {
       showFallbackContentInUEMode(block);
     } else {
       block.remove();
@@ -265,7 +267,7 @@ export default async function decorate(block) {
     });
   } catch (err) {
     shimmer.removeShimmer();
-    if (!UE_AUTHOR_MODE) {
+    if (!UEAuthorMode) {
       renderEmptyState(contentContainer, placeholders);
     } else {
       showFallbackContentInUEMode(block);
