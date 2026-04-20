@@ -317,9 +317,7 @@ export async function buildPLCard(element, model) {
 
     // Prevent navigation when clicking user actions
     cardContainer.addEventListener('click', (e) => {
-      const preventLinkRedirection = !!(e.target && e.target.closest('.user-actions'));
-
-      if (preventLinkRedirection) {
+      if (e.target.closest('.user-actions')) {
         e.preventDefault();
       }
     });
@@ -330,7 +328,7 @@ export async function buildPLCard(element, model) {
     element.appendChild(card);
   }
 
-  element.querySelector('a')?.addEventListener('click', (e) => {
+  card.addEventListener('click', (e) => {
     const { cardHeader, cardPosition } = getCardHeaderAndPosition(card, element);
 
     const cardActions = card.querySelector('.premium-learning-card-actions');
@@ -343,9 +341,7 @@ export async function buildPLCard(element, model) {
       return;
     }
 
-    if (e.target.closest('a:not(.user-actions)')) {
-      pushBrowseCardClickEvent('browseCardClicked', model, cardHeader, cardPosition);
-    }
+    pushBrowseCardClickEvent('browseCardClicked', model, cardHeader, cardPosition);
   });
 }
 
