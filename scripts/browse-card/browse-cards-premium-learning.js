@@ -274,25 +274,13 @@ export async function buildPLCard(element, model) {
       cardContainer.setAttribute('rel', 'noopener noreferrer');
     }
 
-    // Prevent navigation when clicking user actions
     cardContainer.addEventListener('click', (e) => {
       if (e.target?.closest('.user-actions')) {
         e.preventDefault();
-      }
-    });
-
-    cardContainer.addEventListener('click', (e) => {
-      if (e.target?.closest('.user-actions')) {
         return;
       }
 
       const { cardHeader, cardPosition } = getCardHeaderAndPosition(card, element);
-      const cardActions = card.querySelector('.premium-learning-card-actions');
-      if (cardActions) {
-        card.dataset.cardHeader = cardHeader || '';
-        card.dataset.cardPosition = cardPosition || '';
-      }
-
       pushBrowseCardClickEvent('browseCardClicked', model, cardHeader, cardPosition);
     });
 
