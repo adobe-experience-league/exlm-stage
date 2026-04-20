@@ -37,12 +37,28 @@ export function copyHandler(config) {
 
   if (link) {
     const text = link.startsWith('/') ? `${window.location.origin}${link}` : link;
-    copyToClipboard({
-      assetId: id,
-      text,
-      toastText: tooltip?.copyToastText,
-      trackingInfo,
-    });
+    // DEPRECATION: assetInteractionModel removed for browse-cards - using pushBrowseCardClickEvent via callback instead
+    if (!callback) {
+      copyToClipboard({
+        assetId: id,
+        text,
+        toastText: tooltip?.copyToastText,
+        trackingInfo,
+      });
+    } else {
+      // For browse-cards, skip copyToClipboard to avoid assetInteractionModel
+      navigator.clipboard
+        .writeText(text)
+        .then(() => {
+          if (tooltip?.copyToastText) {
+            sendNotice(tooltip.copyToastText);
+          }
+        })
+        .catch((err) => {
+          /* eslint-disable-next-line no-console */
+          console.error('Error copying link to clipboard:', err);
+        });
+    }
     if (callback) callback(linkType, position);
   }
 }
