@@ -889,10 +889,6 @@ async function handleSearchEngineSubscription(block, isUserSignedIn) {
         return;
       }
 
-      /* Analytics */
-      // DEPRECATION: assetInteractionModel removed - using pushBrowseFilterSearchEvent instead
-      filterResultsEl.classList.remove('analytics-interaction');
-
       filterResultsEl.innerHTML = '';
       cardsData.forEach((cardData) => {
         const cardDiv = document.createElement('div');
@@ -912,15 +908,6 @@ async function handleSearchEngineSubscription(block, isUserSignedIn) {
   }
 
   if (results.length === 0) {
-    /* Analytics */
-    // DEPRECATION: assetInteractionModel removed - using pushBrowseFilterSearchEvent instead
-    if (
-      !filterResultsEl.classList.contains('no-results') &&
-      !filterResultsEl.classList.contains('browse-hide-section') &&
-      !filterResultsEl.classList.contains('analytics-interaction')
-    ) {
-      filterResultsEl.classList.add('analytics-interaction');
-    }
     const communityOptionIsSelected = browseFilterForm.querySelector(`input[value="Community"]`)?.checked === true;
     let noResultsText = placeholders.noResultsTextBrowse || 'No Results';
     if (
