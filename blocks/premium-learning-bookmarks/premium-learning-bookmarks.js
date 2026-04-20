@@ -2,6 +2,7 @@
 import { htmlToElement, createTag } from '../../scripts/scripts.js';
 import { buildPLCard } from '../../scripts/browse-card/browse-cards-premium-learning.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import { fetchPremiumLearningBookmarks } from '../../scripts/user-actions/bookmark.js';
 import getEmitter from '../../scripts/events.js';
@@ -94,7 +95,8 @@ export default async function decorate(block) {
 
   // Use shared eligibility gating instead of token-only checks to avoid auth timing races
   // where the token may not be set yet even for an eligible signed-in premium user.
-  const isEligible = await isPLEligible();
+  const signedIn = await isSignedInUser();
+  const isEligible = await isPLEligible(signedIn);
   if (!isEligible) {
     if (UEAuthorMode) showFallbackContentInUEMode(block);
     else block.remove();

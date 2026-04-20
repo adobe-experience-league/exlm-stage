@@ -1,5 +1,6 @@
 import { createTag, fetchLanguagePlaceholders, getConfig } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import {
   fetchUserEnrollments,
@@ -240,12 +241,13 @@ function initCarousel(container) {
  * Decorate function
  */
 export default async function decorate(block) {
-  const [placeholders, isEligible] = await Promise.all([
+  const [placeholders, signedIn] = await Promise.all([
     fetchLanguagePlaceholders().catch(() => ({})),
-    // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-    // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-    isPLEligible(),
+    isSignedInUser(),
   ]);
+  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
+  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
+  const isEligible = await isPLEligible(signedIn);
   if (!isEligible) {
     if (UEAuthorMode) showFallbackContentInUEMode(block);
     else block.remove();

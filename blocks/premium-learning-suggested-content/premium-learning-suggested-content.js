@@ -4,6 +4,7 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import { createTag, fetchLanguagePlaceholders, htmlToElement } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 
@@ -214,12 +215,13 @@ export default async function decorate(block) {
     ctaMarkup,
   );
 
-  const [isEligible, placeholders] = await Promise.all([
-    // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-    // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-    isPLEligible(),
+  const [signedIn, placeholders] = await Promise.all([
+    isSignedInUser(),
     fetchLanguagePlaceholders().catch(() => ({})),
   ]);
+  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
+  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
+  const isEligible = await isPLEligible(signedIn);
 
   if (!isEligible) {
     if (UEAuthorMode) {

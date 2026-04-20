@@ -14,6 +14,7 @@ import {
   fetchLanguagePlaceholders,
 } from '../../scripts/scripts.js';
 import getProducts from '../../scripts/utils/product-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import {
   decoratorState,
@@ -417,7 +418,8 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   // so position is stable regardless of when the async membership check resolves.
   const plNavPlaceholder = document.createElement('li');
   ul.appendChild(plNavPlaceholder);
-  isPLEligible()
+  isSignedInUser()
+    .then((signedIn) => isPLEligible(signedIn))
     .then((isMember) => {
       if (isMember) {
         const placeholders = decoratorOptions.placeholders ?? {};
@@ -708,11 +710,6 @@ class ExlHeader extends HTMLElement {
   constructor(options = {}) {
     super();
 
-    const doIsSignedInUSer = async () => {
-      const { isSignedInUser } = await import('../../scripts/auth/profile.js');
-      return isSignedInUser();
-    };
-
     const doSignOut = async () => {
       const { signOut } = await import('../../scripts/auth/profile.js');
       return signOut();
@@ -723,7 +720,7 @@ class ExlHeader extends HTMLElement {
     };
 
     this.decoratorOptions = options;
-    options.isUserSignedIn = options.isUserSignedIn || doIsSignedInUSer;
+    options.isUserSignedIn = options.isUserSignedIn || isSignedInUser;
     options.onSignOut = options.onSignOut || doSignOut;
     options.onSignIn = options.onSignIn || doSignIn;
     options.getProfilePicture = options.getProfilePicture || getPPSProfilePicture;

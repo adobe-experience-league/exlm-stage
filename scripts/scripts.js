@@ -1754,7 +1754,7 @@ async function loadPage() {
         const { isPLEligible } = await getPLUtils();
 
         // Non-blocking — timeout is handled inside isPLEligible().
-        isPLEligible()
+        isPLEligible(signedIn)
           .then(async (plMember) => {
             // Only fetch enrollments if user is BOTH a PL member AND on profile page
             if (plMember && isProfilePage) {
@@ -1804,14 +1804,14 @@ async function loadPage() {
   if (containsAtomicSearch) {
     initiateCoveoAtomicSearch();
   }
-
   // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
   if (!window.hlx.aemRoot && !window.location.href.includes('.html')) {
     try {
       // Start PL auth in parallel and gate premium sections with timeout fallback.
+      const signedIn = await isUserSignedIn();
       const { applyPLSectionGating } = await getPLUtils();
       // eslint-disable-next-line no-void
-      void applyPLSectionGating();
+      void applyPLSectionGating(signedIn);
     } catch (error) {
       console.error('Error initializing Premium Learning authentication:', error);
       const { removePLSections } = await getPLUtils();

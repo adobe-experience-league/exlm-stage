@@ -2,6 +2,7 @@ import BrowseCardsDelegate from '../../scripts/browse-card/browse-cards-delegate
 import { createTag, fetchLanguagePlaceholders, htmlToElement } from '../../scripts/scripts.js';
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
@@ -51,12 +52,13 @@ export default async function decorate(block) {
   `;
   block.appendChild(headerDiv);
 
-  const [isEligible, placeholders] = await Promise.all([
-    // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-    // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-    isPLEligible(),
+  const [signedIn, placeholders] = await Promise.all([
+    isSignedInUser(),
     fetchLanguagePlaceholders().catch(() => ({})),
   ]);
+  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
+  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
+  const isEligible = await isPLEligible(signedIn);
 
   if (!isEligible) {
     if (UEAuthorMode) {
