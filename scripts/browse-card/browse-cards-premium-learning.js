@@ -296,7 +296,7 @@ export async function buildPLCard(element, model) {
       card.dataset.cardPosition = cardPosition || '';
     }
 
-    if (e.target.closest('.user-actions')) {
+    if (e.target?.closest('.user-actions')) {
       return;
     }
 
