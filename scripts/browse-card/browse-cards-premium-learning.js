@@ -281,27 +281,26 @@ export async function buildPLCard(element, model) {
       }
     });
 
+    cardContainer.addEventListener('click', (e) => {
+      if (e.target?.closest('.user-actions')) {
+        return;
+      }
+
+      const { cardHeader, cardPosition } = getCardHeaderAndPosition(card, element);
+      const cardActions = card.querySelector('.premium-learning-card-actions');
+      if (cardActions) {
+        card.dataset.cardHeader = cardHeader || '';
+        card.dataset.cardPosition = cardPosition || '';
+      }
+
+      pushBrowseCardClickEvent('browseCardClicked', model, cardHeader, cardPosition);
+    });
+
     cardContainer.appendChild(card);
     element.appendChild(cardContainer);
   } else {
     element.appendChild(card);
   }
-
-  element.querySelector('a')?.addEventListener('click', (e) => {
-    const { cardHeader, cardPosition } = getCardHeaderAndPosition(card, element);
-
-    const cardActions = card.querySelector('.premium-learning-card-actions');
-    if (cardActions) {
-      card.dataset.cardHeader = cardHeader || '';
-      card.dataset.cardPosition = cardPosition || '';
-    }
-
-    if (e.target?.closest('.user-actions')) {
-      return;
-    }
-
-    pushBrowseCardClickEvent('browseCardClicked', model, cardHeader, cardPosition);
-  });
 }
 
 export default { buildPLCard };
