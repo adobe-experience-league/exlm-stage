@@ -43,7 +43,7 @@ async function initPLAuth() {
     if (existingToken) {
       const { plApiBaseUrl } = window.exlm?.config || {};
       if (!plApiBaseUrl) {
-        [LEARNER_TOKEN_COOKIE, LEARNER_USER_ID_COOKIE].forEach((c) => deleteCookie(c));
+      if (!plApiBaseUrl) return; // config not ready; skip validation, keep existing token
         return;
       }
       const res = await fetch(`${plApiBaseUrl}/user`, {
