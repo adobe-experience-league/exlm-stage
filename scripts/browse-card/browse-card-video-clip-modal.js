@@ -1,6 +1,6 @@
 import { decorateIcons, loadCSS } from '../lib-franklin.js';
 import { createTag, htmlToElement, fetchLanguagePlaceholders, getPathDetails } from '../scripts.js';
-import { pushVideoEvent, pushBrowseCardClickEvent } from '../analytics/lib-analytics.js';
+import { pushVideoEvent, pushBrowseCardClickEvent, pushVideoMetadataOnLoad } from '../analytics/lib-analytics.js';
 import { getLocalizedVideoUrl } from '../utils/video-utils.js';
 
 export const isCompactUIMode = () => window.matchMedia('(max-width: 1023px)').matches;
@@ -320,6 +320,15 @@ export class BrowseCardVideoClipModal {
     // If this instance is already in the DOM (specifically in document.body), just return
     if (document.body.contains(this.backdrop)) {
       return;
+    }
+
+    // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
+    if (this.model.videoURL?.includes('tv.adobe.com')) {
+      const videoId = this.model.videoURL.match(/\/v\/(\d+)/)?.[1];
+      if (videoId) {
+        const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
+        pushVideoMetadataOnLoad(videoId, this.model.videoURL, thumbnailUrl);
+      }
     }
 
     document.body.appendChild(this.backdrop);

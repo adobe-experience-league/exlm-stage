@@ -1,6 +1,6 @@
 /* eslint-disable max-classes-per-file */
 
-import { pushVideoEvent } from '../../scripts/analytics/lib-analytics.js';
+import { pushVideoEvent, pushVideoMetadataOnLoad } from '../../scripts/analytics/lib-analytics.js';
 
 export const LABELS = {
   tutorials: 'playlistTutorials',
@@ -59,7 +59,12 @@ export class MPCListener {
   onMessage(event) {
     if (!this.active) return;
     if (event?.data?.type === 'mpcStatus') {
-      this.emit(event.data.state, event.data);
+      // Only emit if message is from a playlist player iframe
+      const playlistIframes = document.querySelectorAll('[data-playlist-player] iframe');
+      const isFromPlaylist = [...playlistIframes].some((iframe) => iframe.contentWindow === event.source);
+      if (isFromPlaylist) {
+        this.emit(event.data.state, event.data);
+      }
     }
   }
 
@@ -126,6 +131,17 @@ export class Playlist {
     this.mpcListener.on(MCP_EVENT.TICK, this.handleSeek.bind(this));
     this.mpcListener.on(MCP_EVENT.SEEK, this.handleSeek.bind(this));
     this.mpcListener.on(MCP_EVENT.COMPLETE, this.handleComplete.bind(this));
+    this.mpcListener.on(MCP_EVENT.LOAD, () => {
+      const { src } = this.getActiveVideo();
+      // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
+      if (src?.includes('tv.adobe.com')) {
+        const videoId = src.match(/\/v\/(\d+)/)?.[1];
+        if (videoId) {
+          const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
+          pushVideoMetadataOnLoad(videoId, src, thumbnailUrl);
+        }
+      }
+    });
     this.mpcListener.on(MCP_EVENT.START, () => {
       const { title, description, duration, src } = this.getActiveVideo();
       pushVideoEvent({ title, description, url: src, duration });

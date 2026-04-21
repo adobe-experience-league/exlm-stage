@@ -1,5 +1,7 @@
 import { getLocalizedVideoUrl } from '../../scripts/utils/video-utils.js';
 import { getPathDetails } from '../../scripts/scripts.js';
+import { getMetadata } from '../../scripts/lib-franklin.js';
+import { pushVideoEvent, pushVideoMetadataOnLoad } from '../../scripts/analytics/lib-analytics.js';
 
 const getDefaultEmbed = (url) => `<div class="video-frame">
     <iframe 
@@ -27,6 +29,40 @@ const loadEmbed = (block, link) => {
   block.innerHTML = embedMpc(url);
   block.classList = 'block video-embed';
   block.classList.add('embed-is-loaded');
+
+  const iframe = block.querySelector('iframe');
+  if (!iframe) return;
+
+  let firstPlay = true;
+
+  // Listen only to messages from this specific iframe
+  const handleMessage = (event) => {
+    // Check if message is from this block's iframe
+    if (
+      event.source === iframe.contentWindow &&
+      event.data?.type === 'mpcStatus' &&
+      event.data.state === 'play' &&
+      firstPlay
+    ) {
+      firstPlay = false;
+      const fullSolution = getMetadata('solution') || '';
+      const solution = fullSolution?.split(',')[0]?.trim() || '';
+
+      pushVideoEvent({
+        title: getMetadata('og:title'),
+        description: getMetadata('description'),
+        url: url.href,
+        duration: '',
+        solution,
+        fullSolution,
+      });
+
+      // Remove listener after first play
+      window.removeEventListener('message', handleMessage);
+    }
+  };
+
+  window.addEventListener('message', handleMessage);
 };
 
 export default async function decorate(block) {
@@ -34,6 +70,16 @@ export default async function decorate(block) {
   if (!anchor) return;
 
   const { href } = anchor;
+
+  // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
+  if (href?.includes('tv.adobe.com')) {
+    const videoId = href.match(/\/v\/(\d+)/)?.[1];
+    if (videoId) {
+      const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
+      pushVideoMetadataOnLoad(videoId, href, thumbnailUrl);
+    }
+  }
+
   block.textContent = '';
 
   if (href) {
