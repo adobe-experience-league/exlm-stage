@@ -83,7 +83,7 @@ export function removePLSections() {
  */
 export async function isPLEligible(isSignedIn, timeoutMs = 10000) {
   if (!isFeatureEnabled('isPremiumLearningEnabled')) return false;
-  return !!isSignedIn && checkPLAuth(timeoutMs);
+  return !!isSignedIn && (await checkPLAuth(timeoutMs));
 }
 
 /**
