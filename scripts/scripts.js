@@ -1805,7 +1805,7 @@ async function loadPage() {
     initiateCoveoAtomicSearch();
   }
   // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
-  if (!window.hlx.aemRoot && !window.location.href.includes('.html')) {
+  if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
     try {
       // Start PL auth in parallel and gate premium sections with timeout fallback.
       const signedIn = await isUserSignedIn();

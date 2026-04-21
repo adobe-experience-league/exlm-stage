@@ -97,12 +97,13 @@ export default async function decorate(block) {
   // where the token may not be set yet even for an eligible signed-in premium user.
   const signedIn = await isSignedInUser();
   const isEligible = await isPLEligible(signedIn);
-  if (!isEligible) {
+ if (!isEligible) {
     if (UEAuthorMode) {
       block.innerHTML = '';
       showFallbackContentInUEMode(block);
+    } else {
+      block.remove();
     }
-    else block.remove();
     return;
   }
 
