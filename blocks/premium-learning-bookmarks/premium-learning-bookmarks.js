@@ -17,6 +17,7 @@ function showFallbackContentInUEMode(blockElement) {
   contentDiv.textContent = 'This block will load Premium Learning bookmarks for eligible users only.';
   blockElement.appendChild(contentDiv);
 }
+
 const SHIMMER_COUNT = 4;
 const BATCH_SIZE = 6;
 
