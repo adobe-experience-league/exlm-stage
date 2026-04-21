@@ -102,7 +102,9 @@ export default async function decorate(block) {
       block.innerHTML = '';
       showFallbackContentInUEMode(block);
     }
-    else block.remove();
+    } else {
+      block.remove();
+    }
     return;
   }
 
