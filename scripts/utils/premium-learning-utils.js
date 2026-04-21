@@ -67,9 +67,9 @@ async function checkPLAuth(timeoutMs = 10000) {
       console.error('Error checking Premium Learning status:', error);
       return false;
     });
-  const timeoutId = { id: undefined };
-  const timeout = new Promise((r) => { timeoutId.id = setTimeout(() => r(false), timeoutMs); });
-  return Promise.race([membershipCheck.finally(() => clearTimeout(timeoutId.id)), timeout]);
+  let timeoutHandle;
+  const timeout = new Promise((r) => { timeoutHandle = setTimeout(() => r(false), timeoutMs); });
+  return Promise.race([membershipCheck.finally(() => clearTimeout(timeoutHandle)), timeout]);
 }
 
 export function removePLSections() {

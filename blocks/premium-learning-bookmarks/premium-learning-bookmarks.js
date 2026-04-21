@@ -92,7 +92,6 @@ export default async function decorate(block) {
     </div>
   `);
 
-  block.appendChild(content);
 
   // Use shared eligibility gating instead of token-only checks to avoid auth timing races
   // where the token may not be set yet even for an eligible signed-in premium user.
@@ -106,6 +105,8 @@ export default async function decorate(block) {
     else block.remove();
     return;
   }
+
+  block.appendChild(content);
 
   // Trigger shimmer immediately by calling renderCards with empty array
   renderCards(block, []).catch(() => {});
