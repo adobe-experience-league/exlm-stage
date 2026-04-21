@@ -1724,8 +1724,6 @@ async function loadPage() {
     return window?.adobeIMS?.isSignedInUser();
   };
 
-  const getPLUtils = async () => import('./utils/premium-learning-utils.js');
-
   const loadTarget = async (isAlreadySignedIn = false) => {
     const targetSupportedPaths = ['/perspectives', '/home'];
     if (targetSupportedPaths.includes(currentPagePath)) {
@@ -1751,7 +1749,7 @@ async function loadPage() {
     } else {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
-        const { isPLEligible } = await getPLUtils();
+        const { isPLEligible } = await import('./utils/premium-learning-utils.js');
 
         // Non-blocking — timeout is handled inside isPLEligible().
         isPLEligible(signedIn)
@@ -1809,15 +1807,14 @@ async function loadPage() {
     try {
       // Start PL auth in parallel and gate premium sections with timeout fallback.
       const signedIn = await isUserSignedIn();
-      const { applyPLSectionGating } = await getPLUtils();
+      const { applyPLSectionGating } = await import('./utils/premium-learning-utils.js');
       // eslint-disable-next-line no-void
       void applyPLSectionGating(signedIn).catch((error) => {
         console.error('Error applying PL section gating:', error);
       });
     } catch (error) {
       console.error('Error initializing Premium Learning authentication:', error);
-      const { removePLSections } = await getPLUtils();
-      removePLSections();
+      document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
     }
   }
 

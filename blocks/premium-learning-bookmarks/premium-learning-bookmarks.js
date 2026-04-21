@@ -99,7 +99,6 @@ export default async function decorate(block) {
   const isEligible = await isPLEligible(signedIn);
  if (!isEligible) {
     if (UEAuthorMode) {
-      block.innerHTML = '';
       showFallbackContentInUEMode(block);
     } else {
       block.remove();
