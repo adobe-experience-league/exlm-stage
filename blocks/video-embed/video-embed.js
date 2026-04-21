@@ -33,6 +33,15 @@ const loadEmbed = (block, link) => {
   const iframe = block.querySelector('iframe');
   if (!iframe) return;
 
+  // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
+  if (url.href?.includes('tv.adobe.com')) {
+    const videoId = url.href.match(/\/v\/(\d+)/)?.[1];
+    if (videoId) {
+      const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
+      pushVideoMetadataOnLoad(videoId, url.href, thumbnailUrl);
+    }
+  }
+
   let firstPlay = true;
 
   // Listen only to messages from this specific iframe
@@ -70,15 +79,6 @@ export default async function decorate(block) {
   if (!anchor) return;
 
   const { href } = anchor;
-
-  // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
-  if (href?.includes('tv.adobe.com')) {
-    const videoId = href.match(/\/v\/(\d+)/)?.[1];
-    if (videoId) {
-      const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
-      pushVideoMetadataOnLoad(videoId, href, thumbnailUrl);
-    }
-  }
 
   block.textContent = '';
 

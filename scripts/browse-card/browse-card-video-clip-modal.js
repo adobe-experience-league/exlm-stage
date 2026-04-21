@@ -12,6 +12,8 @@ export class BrowseCardVideoClipModal {
 
   static placeholdersInitialized = false;
 
+  static metadataPushedVideos = new Set();
+
   /**
    * Initialize placeholders if not already done
    * @returns {Promise<Object>} The placeholders object
@@ -322,12 +324,16 @@ export class BrowseCardVideoClipModal {
       return;
     }
 
-    // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
-    if (this.model.videoURL?.includes('tv.adobe.com')) {
+    // Call pushVideoMetadataOnLoad if video is from tv.adobe.com (only once per video URL)
+    if (
+      this.model.videoURL?.includes('tv.adobe.com') &&
+      !BrowseCardVideoClipModal.metadataPushedVideos.has(this.model.videoURL)
+    ) {
       const videoId = this.model.videoURL.match(/\/v\/(\d+)/)?.[1];
       if (videoId) {
         const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
         pushVideoMetadataOnLoad(videoId, this.model.videoURL, thumbnailUrl);
+        BrowseCardVideoClipModal.metadataPushedVideos.add(this.model.videoURL);
       }
     }
 
