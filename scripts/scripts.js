@@ -1811,7 +1811,9 @@ async function loadPage() {
       const signedIn = await isUserSignedIn();
       const { applyPLSectionGating } = await getPLUtils();
       // eslint-disable-next-line no-void
-      void applyPLSectionGating(signedIn);
+      void applyPLSectionGating(signedIn).catch((error) => {
+        console.error('Error applying PL section gating:', error);
+      });
     } catch (error) {
       console.error('Error initializing Premium Learning authentication:', error);
       const { removePLSections } = await getPLUtils();
