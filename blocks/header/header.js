@@ -417,6 +417,7 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   // Reserve a slot for the PL nav link before featured products are built,
   // so position is stable regardless of when the async membership check resolves.
   const plNavPlaceholder = document.createElement('li');
+  plNavPlaceholder.style.display = 'none';
   ul.appendChild(plNavPlaceholder);
   isSignedInUser()
     .then((signedIn) => isPLEligible(signedIn))

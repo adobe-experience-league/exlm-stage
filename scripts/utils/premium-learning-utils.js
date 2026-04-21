@@ -21,8 +21,11 @@ async function exchangePLToken(imsToken) {
       headers: { Authorization: `Bearer ${imsToken}` },
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const { access_token: accessToken, expires_in: expiresIn = DEFAULT_EXPIRES, user_id: userId }
-      = await response.json();
+    const {
+      access_token: accessToken,
+      expires_in: expiresIn = DEFAULT_EXPIRES,
+      user_id: userId,
+    } = await response.json();
     if (!accessToken) return;
     setCookie(LEARNER_TOKEN_COOKIE, accessToken, expiresIn);
     if (userId) setCookie(LEARNER_USER_ID_COOKIE, userId, expiresIn);
@@ -63,7 +66,9 @@ async function checkPLAuth(timeoutMs = 10000) {
       console.error('Error checking Premium Learning status:', error);
       return false;
     });
-  return Promise.race([membershipCheck, new Promise((r) => { setTimeout(() => r(false), timeoutMs); })]);
+  const timeoutId = { id: undefined };
+  const timeout = new Promise((r) => { timeoutId.id = setTimeout(() => r(false), timeoutMs); });
+  return Promise.race([membershipCheck.finally(() => clearTimeout(timeoutId.id)), timeout]);
 }
 
 export function removePLSections() {
