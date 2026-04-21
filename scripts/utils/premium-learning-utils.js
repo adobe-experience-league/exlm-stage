@@ -42,6 +42,8 @@ async function initPLAuth() {
     const existingToken = getCookie(LEARNER_TOKEN_COOKIE);
     if (existingToken) {
       const { plApiBaseUrl } = window.exlm?.config || {};
+      const { plApiBaseUrl } = window.exlm?.config || {};
+      if (!plApiBaseUrl) return;
       const res = await fetch(`${plApiBaseUrl}/user`, {
         headers: { Authorization: `Bearer ${existingToken}`, Accept: 'application/vnd.api+json' },
       });
