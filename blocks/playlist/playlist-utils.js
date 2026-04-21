@@ -87,6 +87,8 @@ export class MPCListener {
 }
 
 export class Playlist {
+  static metadataPushedVideos = new Set();
+
   title = '';
 
   description = '';
@@ -133,12 +135,13 @@ export class Playlist {
     this.mpcListener.on(MCP_EVENT.COMPLETE, this.handleComplete.bind(this));
     this.mpcListener.on(MCP_EVENT.LOAD, () => {
       const { src } = this.getActiveVideo();
-      // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
-      if (src?.includes('tv.adobe.com')) {
+      // Call pushVideoMetadataOnLoad if video is from tv.adobe.com (only once per video URL)
+      if (src?.includes('tv.adobe.com') && !Playlist.metadataPushedVideos.has(src)) {
         const videoId = src.match(/\/v\/(\d+)/)?.[1];
         if (videoId) {
           const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
           pushVideoMetadataOnLoad(videoId, src, thumbnailUrl);
+          Playlist.metadataPushedVideos.add(src);
         }
       }
     });
