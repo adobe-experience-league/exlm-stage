@@ -1749,10 +1749,9 @@ async function loadPage() {
     } else {
       const signedIn = await isUserSignedIn();
       if (signedIn) {
-        const { isPLEligible } = await import('./utils/premium-learning-utils.js');
-
         // Non-blocking — timeout is handled inside isPLEligible().
-        isPLEligible(signedIn)
+        import('./utils/premium-learning-utils.js')
+          .then(({ isPLEligible }) => isPLEligible(signedIn))
           .then(async (plMember) => {
             // Only fetch enrollments if user is BOTH a PL member AND on profile page
             if (plMember && isProfilePage) {
@@ -1802,20 +1801,14 @@ async function loadPage() {
   if (containsAtomicSearch) {
     initiateCoveoAtomicSearch();
   }
-  // Initialize Premium Learning auth for all signed-in users, excluding UE Authoring pages
+  // Initialize Premium Learning auth — fully non-blocking, does not delay loadPage().
   if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
-    try {
-      // Start PL auth in parallel and gate premium sections with timeout fallback.
-      const signedIn = await isUserSignedIn();
-      const { applyPLSectionGating } = await import('./utils/premium-learning-utils.js');
-      // eslint-disable-next-line no-void
-      void applyPLSectionGating(signedIn).catch((error) => {
-        console.error('Error applying PL section gating:', error);
+    isUserSignedIn()
+      .then((signedIn) => import('./utils/premium-learning-utils.js').then(({ applyPLSectionGating }) => applyPLSectionGating(signedIn)))
+      .catch((error) => {
+        console.error('Error initializing Premium Learning authentication:', error);
+        document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
       });
-    } catch (error) {
-      console.error('Error initializing Premium Learning authentication:', error);
-      document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
-    }
   }
 
   if (isProfilePage) {

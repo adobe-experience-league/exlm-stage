@@ -215,66 +215,70 @@ export default async function decorate(block) {
     ctaMarkup,
   );
 
+  const shimmer = new BrowseCardShimmer(FETCH_LIMIT, PL_CONTENT_TYPES.COHORT.MAPPING_KEY);
+  shimmer.addShimmer(contentContainer);
+
   const [signedIn, placeholders] = await Promise.all([
     isSignedInUser(),
     fetchLanguagePlaceholders().catch(() => ({})),
   ]);
-  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-  const isEligible = await isPLEligible(signedIn);
 
-  if (!isEligible) {
-    if (UEAuthorMode) {
-      showFallbackContentInUEMode(block);
-    } else {
-      block.remove();
-    }
-    return;
-  }
+  // Non-blocking eligibility check — shimmer stays visible until resolved.
+  isPLEligible(signedIn)
+    .then(async (isEligible) => {
+      if (!isEligible) {
+        shimmer.removeShimmer();
+        if (UEAuthorMode) showFallbackContentInUEMode(block);
+        else block.remove();
+        return;
+      }
 
-  const shimmer = new BrowseCardShimmer(FETCH_LIMIT, PL_CONTENT_TYPES.COHORT.MAPPING_KEY);
-  shimmer.addShimmer(contentContainer);
+      try {
+        const suggestedContentItems = await fetchSuggestedContentCards(contentType);
+        shimmer.removeShimmer();
 
-  try {
-    const suggestedContentItems = await fetchSuggestedContentCards(contentType);
-    shimmer.removeShimmer();
+        if (!suggestedContentItems?.length) {
+          renderEmptyState(contentContainer, placeholders);
+          return;
+        }
 
-    if (!suggestedContentItems?.length) {
-      renderEmptyState(contentContainer, placeholders);
-      return;
-    }
+        const tabs = getTabDefinitions(suggestedContentItems, placeholders);
 
-    const tabs = getTabDefinitions(suggestedContentItems, placeholders);
+        if (!tabs.length) {
+          renderEmptyState(contentContainer, placeholders);
+          return;
+        }
 
-    if (!tabs.length) {
-      renderEmptyState(contentContainer, placeholders);
-      return;
-    }
+        clearRenderedContent(contentContainer);
+        const { panel, contentDiv } = createContentPanel();
+        const tabsById = Object.fromEntries(tabs.map((tab) => [tab.id, tab]));
+        const defaultTab = tabs[0];
+        const listItems = buildResponsiveListItems(tabs);
 
-    clearRenderedContent(contentContainer);
-    const { panel, contentDiv } = createContentPanel();
-    const tabsById = Object.fromEntries(tabs.map((tab) => [tab.id, tab]));
-    const defaultTab = tabs[0];
-    const listItems = buildResponsiveListItems(tabs);
+        tabHeader.textContent = '';
+        contentContainer.appendChild(panel);
 
-    tabHeader.textContent = '';
-    contentContainer.appendChild(panel);
-
-    initializeResponsiveTabs({
-      tabHeader,
-      listItems,
-      defaultTab,
-      tabsById,
-      contentDiv,
+        initializeResponsiveTabs({
+          tabHeader,
+          listItems,
+          defaultTab,
+          tabsById,
+          contentDiv,
+        });
+      } catch (err) {
+        shimmer.removeShimmer();
+        if (!UEAuthorMode) {
+          renderEmptyState(contentContainer, placeholders);
+        } else {
+          showFallbackContentInUEMode(block);
+        }
+        // eslint-disable-next-line no-console
+        console.error(err);
+      }
+    })
+    .catch((err) => {
+      shimmer.removeShimmer();
+      // eslint-disable-next-line no-console
+      console.error(err);
     });
-  } catch (err) {
-    shimmer.removeShimmer();
-    if (!UEAuthorMode) {
-      renderEmptyState(contentContainer, placeholders);
-    } else {
-      showFallbackContentInUEMode(block);
-    }
-    // eslint-disable-next-line no-console
-    console.error(err);
-  }
 }

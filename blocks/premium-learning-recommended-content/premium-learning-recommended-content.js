@@ -3,7 +3,7 @@ import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import { createTag, fetchLanguagePlaceholders, getConfig, htmlToElement } from '../../scripts/scripts.js';
 import { isSignedInUser } from '../../scripts/auth/profile.js';
-import { getPLAccessToken, isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { getPLAccessToken } from '../../scripts/utils/premium-learning-utils.js';
 import { getCookie } from '../../scripts/utils/cookie-utils.js';
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
@@ -127,15 +127,9 @@ export default async function decorate(block) {
   block.classList.add('browse-cards-block', 'premium-learning-recommended-content-block');
   block.appendChild(buildBlockHeader(headingElement?.innerHTML || '', descriptionElement?.innerHTML || '', ctaMarkup));
 
-  const [signedIn, placeholders] = await Promise.all([
-    isSignedInUser(),
-    fetchLanguagePlaceholders().catch(() => ({})),
-  ]);
-  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-  const isEligible = await isPLEligible(signedIn);
+  const [signedIn, placeholders] = await Promise.all([isSignedInUser(), fetchLanguagePlaceholders().catch(() => ({}))]);
 
-  if (!isEligible) {
+  if (!signedIn) {
     if (UEAuthorMode) showFallbackContentInUEMode(block);
     else block.remove();
     return;

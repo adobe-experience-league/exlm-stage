@@ -1,7 +1,5 @@
 import { createTag, fetchLanguagePlaceholders, getConfig } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
-import { isSignedInUser } from '../../scripts/auth/profile.js';
-import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import {
   fetchUserEnrollments,
   fetchCohortProgress,
@@ -11,12 +9,6 @@ import {
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
-
-function showFallbackContentInUEMode(blockElement) {
-  const contentDiv = createTag('div', { class: 'premium-learning-active-content-fallback' });
-  contentDiv.textContent = 'This block will load Premium Learning active content for eligible users only.';
-  blockElement.appendChild(contentDiv);
-}
 
 function calculateTotalReplies(postsData) {
   if (!postsData?.data) return 0;
@@ -241,19 +233,7 @@ function initCarousel(container) {
  * Decorate function
  */
 export default async function decorate(block) {
-  const [placeholders, signedIn] = await Promise.all([
-    fetchLanguagePlaceholders().catch(() => ({})),
-    isSignedInUser(),
-  ]);
-  // Keep a block-level eligibility gate because global section gating is initialized asynchronously;
-  // this prevents a brief render/fetch race where premium content can flash before cleanup completes.
-  const isEligible = await isPLEligible(signedIn);
-  if (!isEligible) {
-    if (UEAuthorMode) showFallbackContentInUEMode(block);
-    else block.remove();
-    return;
-  }
-
+  const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
   const config = getConfig();
   const [headingElement, descriptionElement, ctaElement] = [...block.children];
 
