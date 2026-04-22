@@ -5,14 +5,14 @@ const LEARNER_TOKEN_COOKIE = 'alm_access_token';
 const LEARNER_USER_ID_COOKIE = 'alm_user_id';
 const DEFAULT_EXPIRES = 86400;
 
-let plAuthPromise;
+let authPromise;
 
 export function getPLAccessToken() {
   return getCookie(LEARNER_TOKEN_COOKIE);
 }
 
 // Exchanges IMS token for a Premium Learning access token and stores it in cookies.
-async function exchangePLToken(imsToken) {
+async function exchangeToken(imsToken) {
   try {
     const { premiumLearningAuthAPI } = window.exlm?.config || {};
     if (!premiumLearningAuthAPI) return;
@@ -36,9 +36,9 @@ async function exchangePLToken(imsToken) {
 }
 
 // Runs PL authentication once (memoized): validates existing token or fetches a new one via IMS.
-async function initPLAuth() {
-  if (plAuthPromise) return plAuthPromise;
-  plAuthPromise = (async () => {
+async function initAuth() {
+  if (authPromise) return authPromise;
+  authPromise = (async () => {
     const existingToken = getCookie(LEARNER_TOKEN_COOKIE);
     if (existingToken) {
       const { plApiBaseUrl } = window.exlm?.config || {};
@@ -50,17 +50,17 @@ async function initPLAuth() {
       [LEARNER_TOKEN_COOKIE, LEARNER_USER_ID_COOKIE].forEach((c) => deleteCookie(c));
     }
     const imsToken = window.adobeIMS?.getAccessToken()?.token;
-    if (imsToken) await exchangePLToken(imsToken);
+    if (imsToken) await exchangeToken(imsToken);
   })().catch((error) => {
-    plAuthPromise = undefined;
+    authPromise = undefined;
     throw error;
   });
-  return plAuthPromise;
+  return authPromise;
 }
 
 // Resolves true if the user has a valid PL token, with a timeout fallback returning false.
-async function checkPLAuth(timeoutMs = 10000) {
-  const membershipCheck = initPLAuth()
+async function verifyAuth(timeoutMs = 10000) {
+  const membershipCheck = initAuth()
     .then(() => !!getCookie(LEARNER_TOKEN_COOKIE))
     .catch((error) => {
       // eslint-disable-next-line no-console
@@ -72,27 +72,22 @@ async function checkPLAuth(timeoutMs = 10000) {
   return Promise.race([membershipCheck.finally(() => clearTimeout(timeoutHandle)), timeout]);
 }
 
-export function removePLSections() {
-  document.querySelectorAll('.premium-learning-section').forEach((section) => section.remove());
-}
-
 /**
- * @param {boolean} isSignedIn
  * @param {number} [timeoutMs]
  * @returns {Promise<boolean>}
  */
-export async function isPLEligible(isSignedIn, timeoutMs = 10000) {
+export async function isPLEligible(timeoutMs = 10000) {
   if (!isFeatureEnabled('isPremiumLearningEnabled')) return false;
-  return !!isSignedIn && (checkPLAuth(timeoutMs));
+  if (!window.adobeIMS?.isSignedInUser()) return false;
+  return verifyAuth(timeoutMs);
 }
 
 /**
- * @param {boolean} isSignedIn
  * @param {number} [timeoutMs]
  * @returns {Promise<boolean>}
  */
-export async function applyPLSectionGating(isSignedIn, timeoutMs = 10000) {
-  const isEligible = await isPLEligible(isSignedIn, timeoutMs);
-  if (!isEligible) removePLSections();
+export async function applyPLSectionGating(timeoutMs = 10000) {
+  const isEligible = await isPLEligible(timeoutMs);
+  if (!isEligible) document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
   return isEligible;
 }

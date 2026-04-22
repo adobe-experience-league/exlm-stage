@@ -947,6 +947,10 @@ export const URL_SPECIAL_CASE_LOCALES = new Map([
   ['zh-hant', 'zh-TW'],
 ]);
 
+
+// TODO: Move loadIms() out of scripts.js into a dedicated  utility .
+// and import it from there. Its current location causes a cyclic dependency because
+// premium-learning-utils.js → profile.js → scripts.js → premium-learning-utils.js.
 export async function loadIms() {
   // if adobe IMS was loaded already, return. Especially useful when embedding this code outside this site.
   // eg. embedding header in community which has it's own IMS setup.
@@ -1751,10 +1755,13 @@ async function loadPage() {
       if (signedIn) {
         // Non-blocking — timeout is handled inside isPLEligible().
         import('./utils/premium-learning-utils.js')
-          .then(({ isPLEligible }) => isPLEligible(signedIn))
+          .then(({ isPLEligible }) => isPLEligible())
           .then(async (plMember) => {
             // Only fetch enrollments if user is BOTH a PL member AND on profile page
             if (plMember && isProfilePage) {
+              // TODO: Guard this fetch behind a check that the PL blocks are actually present
+              // in the DOM before firing — avoids an unnecessary API call on profile pages
+              // that have no PL content blocks.
               const { fetchUserEnrollments } = await import('./data-service/premium-learning-data-service.js');
               const config = getConfig();
               const enrollmentData = await fetchUserEnrollments(config, 'learningProgram', 10);
@@ -1803,8 +1810,8 @@ async function loadPage() {
   }
   // Initialize Premium Learning auth — fully non-blocking, does not delay loadPage().
   if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
-    isUserSignedIn()
-      .then((signedIn) => import('./utils/premium-learning-utils.js').then(({ applyPLSectionGating }) => applyPLSectionGating(signedIn)))
+    import('./utils/premium-learning-utils.js')
+      .then(({ applyPLSectionGating }) => applyPLSectionGating())
       .catch((error) => {
         console.error('Error initializing Premium Learning authentication:', error);
         document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());

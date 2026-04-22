@@ -419,8 +419,7 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   const plNavPlaceholder = document.createElement('li');
   plNavPlaceholder.style.display = 'none';
   ul.appendChild(plNavPlaceholder);
-  isSignedInUser()
-    .then((signedIn) => isPLEligible(signedIn))
+  isPLEligible()
     .then((isMember) => {
       if (isMember) {
         const placeholders = decoratorOptions.placeholders ?? {};

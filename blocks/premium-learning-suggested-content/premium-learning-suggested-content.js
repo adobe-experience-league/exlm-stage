@@ -4,7 +4,6 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import { createTag, fetchLanguagePlaceholders, htmlToElement } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
-import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 
@@ -218,13 +217,10 @@ export default async function decorate(block) {
   const shimmer = new BrowseCardShimmer(FETCH_LIMIT, PL_CONTENT_TYPES.COHORT.MAPPING_KEY);
   shimmer.addShimmer(contentContainer);
 
-  const [signedIn, placeholders] = await Promise.all([
-    isSignedInUser(),
-    fetchLanguagePlaceholders().catch(() => ({})),
-  ]);
+  const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  isPLEligible(signedIn)
+  isPLEligible()
     .then(async (isEligible) => {
       if (!isEligible) {
         shimmer.removeShimmer();
