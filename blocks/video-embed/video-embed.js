@@ -15,39 +15,15 @@ const getDefaultEmbed = (url) => `<div class="video-frame">
     </iframe>
   </div>`;
 
-const embedMpc = (url) => {
+const embedMpc = (url, block) => {
   const urlObject = new URL(url);
-  return getDefaultEmbed(urlObject);
-};
-
-const loadEmbed = (block, link) => {
-  if (block.classList.contains('embed-is-loaded')) {
-    return;
-  }
-
-  const url = new URL(link);
-  block.innerHTML = embedMpc(url);
-  block.classList = 'block video-embed';
-  block.classList.add('embed-is-loaded');
-
-  const iframe = block.querySelector('iframe');
-  if (!iframe) return;
-
-  // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
-  if (url.href?.includes('tv.adobe.com')) {
-    const videoId = url.href.match(/\/v\/(\d+)/)?.[1];
-    if (videoId) {
-      const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
-      pushVideoMetadataOnLoad(videoId, url.href, thumbnailUrl);
-    }
-  }
-
   let firstPlay = true;
 
-  // Listen only to messages from this specific iframe
   const handleMessage = (event) => {
+    const iframe = block.querySelector('iframe');
     // Check if message is from this block's iframe
     if (
+      iframe &&
       event.source === iframe.contentWindow &&
       event.data?.type === 'mpcStatus' &&
       event.data.state === 'play' &&
@@ -71,7 +47,29 @@ const loadEmbed = (block, link) => {
     }
   };
 
-  window.addEventListener('message', handleMessage);
+  window.addEventListener('message', handleMessage, false);
+
+  return getDefaultEmbed(urlObject);
+};
+
+const loadEmbed = (block, link) => {
+  if (block.classList.contains('embed-is-loaded')) {
+    return;
+  }
+
+  const url = new URL(link);
+  block.innerHTML = embedMpc(url, block);
+  block.classList = 'block video-embed';
+  block.classList.add('embed-is-loaded');
+
+  // Call pushVideoMetadataOnLoad if video is from tv.adobe.com
+  if (url.href?.includes('tv.adobe.com')) {
+    const videoId = url.href.match(/\/v\/(\d+)/)?.[1];
+    if (videoId) {
+      const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
+      pushVideoMetadataOnLoad(videoId, url.href, thumbnailUrl);
+    }
+  }
 };
 
 export default async function decorate(block) {
