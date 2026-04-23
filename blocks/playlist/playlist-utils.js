@@ -1,6 +1,6 @@
 /* eslint-disable max-classes-per-file */
 
-import { pushVideoEvent, pushVideoMetadataOnLoad } from '../../scripts/analytics/lib-analytics.js';
+import { pushVideoEvent } from '../../scripts/analytics/lib-analytics.js';
 
 export const LABELS = {
   tutorials: 'playlistTutorials',
@@ -87,8 +87,6 @@ export class MPCListener {
 }
 
 export class Playlist {
-  static metadataPushedVideos = new Set();
-
   title = '';
 
   description = '';
@@ -133,18 +131,6 @@ export class Playlist {
     this.mpcListener.on(MCP_EVENT.TICK, this.handleSeek.bind(this));
     this.mpcListener.on(MCP_EVENT.SEEK, this.handleSeek.bind(this));
     this.mpcListener.on(MCP_EVENT.COMPLETE, this.handleComplete.bind(this));
-    this.mpcListener.on(MCP_EVENT.LOAD, () => {
-      const { src } = this.getActiveVideo();
-      // Call pushVideoMetadataOnLoad if video is from tv.adobe.com (only once per video URL)
-      if (src?.includes('tv.adobe.com') && !Playlist.metadataPushedVideos.has(src)) {
-        const videoId = src.match(/\/v\/(\d+)/)?.[1];
-        if (videoId) {
-          const thumbnailUrl = `https://video.tv.adobe.com/v/${videoId}?format=jpeg`;
-          pushVideoMetadataOnLoad(videoId, src, thumbnailUrl);
-          Playlist.metadataPushedVideos.add(src);
-        }
-      }
-    });
     this.mpcListener.on(MCP_EVENT.START, () => {
       const { title, description, duration, src } = this.getActiveVideo();
       pushVideoEvent({ title, description, url: src, duration });
