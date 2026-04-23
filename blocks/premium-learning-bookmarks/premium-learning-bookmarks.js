@@ -157,7 +157,7 @@ export default async function decorate(block) {
     })
     .catch((err) => {
       // eslint-disable-next-line no-console
-      console.error(err);
+      console.error('Error resolving PL eligibility for bookmarks:', err);
       block.querySelector('.premium-learning-bookmarks-content')?.remove();
       block.classList.add('pl-bookmarks-empty');
     });

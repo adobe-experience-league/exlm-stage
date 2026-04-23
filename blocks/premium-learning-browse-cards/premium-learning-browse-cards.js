@@ -119,18 +119,23 @@ export default async function decorate(block) {
         })
         .catch((err) => {
           buildCardsShimmer.removeShimmer();
+          if (UEAuthorMode) {
+            showFallbackContentInUEMode(block);
+          } else {
+            block.remove();
+          }
           /* eslint-disable-next-line no-console */
-          console.error(err);
+          console.error('Error fetching PL browse card data:', err);
         });
     })
     .catch((err) => {
       buildCardsShimmer.removeShimmer();
       if (!UEAuthorMode) {
-            block.remove();
-          } else {
-            showFallbackContentInUEMode(block);
-          }
+        block.remove();
+      } else {
+        showFallbackContentInUEMode(block);
+      }
       /* eslint-disable-next-line no-console */
-      console.error(err);
+      console.error('Error resolving PL eligibility for browse cards:', err);
     });
 }

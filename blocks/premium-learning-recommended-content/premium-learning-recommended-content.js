@@ -170,14 +170,16 @@ export default async function decorate(block) {
       } catch (err) {
         shimmer.removeShimmer();
         /* eslint-disable-next-line no-console */
-        console.error(err);
+        console.error('Error fetching PL recommended content:', err);
         if (UEAuthorMode) showFallbackContentInUEMode(block);
         else block.remove();
       }
     })
     .catch((err) => {
       shimmer.removeShimmer();
+      if (UEAuthorMode) showFallbackContentInUEMode(block);
+      else block.remove();
       /* eslint-disable-next-line no-console */
-      console.error(err);
+      console.error('Error resolving PL eligibility for recommended content:', err);
     });
 }

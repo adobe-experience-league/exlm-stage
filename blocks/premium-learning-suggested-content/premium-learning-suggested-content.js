@@ -272,12 +272,14 @@ export default async function decorate(block) {
           showFallbackContentInUEMode(block);
         }
         // eslint-disable-next-line no-console
-        console.error(err);
+        console.error('Error fetching PL suggested content:', err);
       }
     })
     .catch((err) => {
       shimmer.removeShimmer();
+      if (UEAuthorMode) showFallbackContentInUEMode(block);
+      else block.remove();
       // eslint-disable-next-line no-console
-      console.error(err);
+      console.error('Error resolving PL eligibility for suggested content:', err);
     });
 }

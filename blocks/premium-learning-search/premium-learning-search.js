@@ -275,6 +275,6 @@ export default async function decorate(block) {
         handleEmptyPremiumLearningSection(premiumLearningSection);
       }
       /* eslint-disable-next-line no-console */
-      console.error(err);
+      console.error('Error resolving PL eligibility for search:', err);
     });
 }

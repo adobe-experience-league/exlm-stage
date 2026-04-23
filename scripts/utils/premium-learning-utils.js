@@ -5,6 +5,8 @@ const LEARNER_TOKEN_COOKIE = 'alm_access_token';
 const LEARNER_USER_ID_COOKIE = 'alm_user_id';
 const DEFAULT_EXPIRES = 86400;
 
+// Module-level singleton — safe in practice because sign-out calls window.adobeIMS.signOut()
+// which redirects via IMS and causes a full page reload, resetting this naturally.
 let plAuthPromise;
 
 export function getPLAccessToken() {
