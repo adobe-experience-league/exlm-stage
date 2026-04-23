@@ -5,6 +5,7 @@ import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import { createTag, fetchLanguagePlaceholders, htmlToElement } from '../../scripts/scripts.js';
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import ResponsiveList from '../../scripts/responsive-list/responsive-list.js';
 
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
@@ -220,7 +221,9 @@ export default async function decorate(block) {
   const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  isPLEligible()
+  // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  isSignedInUser()
+    .then((signedIn) => isPLEligible(signedIn))
     .then(async (isEligible) => {
       if (!isEligible) {
         shimmer.removeShimmer();

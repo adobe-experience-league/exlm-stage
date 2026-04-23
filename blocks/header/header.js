@@ -419,7 +419,9 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   const plNavPlaceholder = document.createElement('li');
   plNavPlaceholder.style.display = 'none';
   ul.appendChild(plNavPlaceholder);
-  isPLEligible()
+ // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  isSignedInUser()
+    .then((signedIn) => isPLEligible(signedIn))
     .then((isMember) => {
       if (isMember) {
         const placeholders = decoratorOptions.placeholders ?? {};

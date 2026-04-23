@@ -3,6 +3,7 @@ import { htmlToElement } from '../../scripts/scripts.js';
 import { buildPLCard } from '../../scripts/browse-card/browse-cards-premium-learning.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { fetchPremiumLearningBookmarks } from '../../scripts/user-actions/bookmark.js';
 import getEmitter from '../../scripts/events.js';
 import PL_CONTENT_TYPES from '../../scripts/data-service/premium-learning/premium-learning-constants.js';
@@ -91,7 +92,9 @@ export default async function decorate(block) {
   renderCards(block, []).catch(() => {});
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  isPLEligible()
+  // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  isSignedInUser()
+    .then((signedIn) => isPLEligible(signedIn))
     .then(async (isEligible) => {
       if (!isEligible) {
         block.querySelector('.premium-learning-bookmarks-content')?.remove();

@@ -1755,7 +1755,7 @@ async function loadPage() {
       if (signedIn) {
         // Non-blocking — timeout is handled inside isPLEligible().
         import('./utils/premium-learning-utils.js')
-          .then(({ isPLEligible }) => isPLEligible())
+          .then(({ isPLEligible }) => isPLEligible(signedIn))
           .then(async (plMember) => {
             // Only fetch enrollments if user is BOTH a PL member AND on profile page
             if (plMember && isProfilePage) {
@@ -1810,8 +1810,10 @@ async function loadPage() {
   }
   // Initialize Premium Learning auth — fully non-blocking, does not delay loadPage().
   if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
-    import('./utils/premium-learning-utils.js')
-      .then(({ applyPLSectionGating }) => applyPLSectionGating())
+    // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+    isUserSignedIn()
+      .then((signedIn) => import('./utils/premium-learning-utils.js')
+        .then(({ applyPLSectionGating }) => applyPLSectionGating(signedIn)))
       .catch((error) => {
         console.error('Error initializing Premium Learning authentication:', error);
         document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());

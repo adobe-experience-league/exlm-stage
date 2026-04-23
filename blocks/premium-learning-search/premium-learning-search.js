@@ -6,6 +6,7 @@ import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js'
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
 import { COVEO_SEARCH_CUSTOM_EVENTS } from '../../scripts/search/search-utils.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { isSignedInUser } from '../../scripts/auth/profile.js';
 
 const isSearchPage = getMetadata('theme')?.includes('search') || false;
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
@@ -97,7 +98,9 @@ export default async function decorate(block) {
   const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  isPLEligible()
+  // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  isSignedInUser()
+    .then((signedIn) => isPLEligible(signedIn))
     .then((isEligible) => {
       if (!isEligible) {
         buildCardsShimmer.removeShimmer();
