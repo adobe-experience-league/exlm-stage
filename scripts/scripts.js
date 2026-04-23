@@ -1780,6 +1780,7 @@ async function loadPage() {
             }
           })
           .catch((error) => {
+            // eslint-disable-next-line no-console
             console.error('Error resolving Premium Learning membership:', error);
           });
 
@@ -1815,6 +1816,7 @@ async function loadPage() {
       .then((signedIn) => import('./utils/premium-learning-utils.js')
         .then(({ applyPLSectionGating }) => applyPLSectionGating(signedIn)))
       .catch((error) => {
+        // eslint-disable-next-line no-console
         console.error('Error initializing Premium Learning authentication:', error);
         document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
       });

@@ -427,13 +427,14 @@ const navDecorator = async (navBlock, decoratorOptions) => {
         const placeholders = decoratorOptions.placeholders ?? {};
         const premiumLearningLabel = placeholders?.premiumLearningHeaderLabel || 'Premium Learning';
         const { premiumHomeUrl } = getConfig();
-        plNavPlaceholder.replaceWith(
-          htmlToElement(
-            `<li class="nav-item nav-item-root nav-item-leaf">
-              <a href="${premiumHomeUrl}" title="${premiumLearningLabel}">${premiumLearningLabel}</a>
-            </li>`,
-          ),
-        );
+        const li = document.createElement('li');
+        li.className = 'nav-item nav-item-root nav-item-leaf';
+        const a = document.createElement('a');
+        a.href = premiumHomeUrl;
+        a.title = premiumLearningLabel;
+        a.textContent = premiumLearningLabel;
+        li.appendChild(a);
+        plNavPlaceholder.replaceWith(li);
       } else {
         plNavPlaceholder.remove();
       }
