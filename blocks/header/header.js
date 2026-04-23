@@ -414,12 +414,7 @@ const navDecorator = async (navBlock, decoratorOptions) => {
   const ul = navWrapper.querySelector(':scope > ul');
   buildNavItems(ul);
 
-  // Reserve a slot for the PL nav link before featured products are built,
-  // so position is stable regardless of when the async membership check resolves.
-  const plNavPlaceholder = document.createElement('li');
-  plNavPlaceholder.style.display = 'none';
-  ul.appendChild(plNavPlaceholder);
- // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
+  // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
   isSignedInUser()
     .then((signedIn) => isPLEligible(signedIn))
     .then((isMember) => {
@@ -427,16 +422,16 @@ const navDecorator = async (navBlock, decoratorOptions) => {
         const placeholders = decoratorOptions.placeholders ?? {};
         const premiumLearningLabel = placeholders?.premiumLearningHeaderLabel || 'Premium Learning';
         const { premiumHomeUrl } = getConfig();
-        const li = htmlToElement(
-          `<li class="nav-item nav-item-root nav-item-leaf"><a href="${premiumHomeUrl}" title="${premiumLearningLabel}">${premiumLearningLabel}</a></li>`,
+        ul.appendChild(
+          htmlToElement(
+            `<li class="nav-item nav-item-root nav-item-leaf">
+              <a href="${premiumHomeUrl}" title="${premiumLearningLabel}">${premiumLearningLabel}</a>
+            </li>`,
+          ),
         );
-        plNavPlaceholder.replaceWith(li);
-      } else {
-        plNavPlaceholder.remove();
       }
     })
     .catch((err) => {
-      plNavPlaceholder.remove();
       /* eslint-disable-next-line no-console */
       console.error('Error checking Premium Learning membership in header:', err);
     });
