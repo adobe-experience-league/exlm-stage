@@ -1810,7 +1810,7 @@ async function loadPage() {
   }
   // Initialize Premium Learning auth — fully non-blocking, does not delay loadPage().
   if (!window.hlx.aemRoot && !window.location.href.includes('.html') && isFeatureEnabled('isPremiumLearningEnabled')) {
-    // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+    // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
     isUserSignedIn()
       .then((signedIn) => import('./utils/premium-learning-utils.js')
         .then(({ applyPLSectionGating }) => applyPLSectionGating(signedIn)))

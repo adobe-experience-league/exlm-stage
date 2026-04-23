@@ -92,7 +92,7 @@ export default async function decorate(block) {
   renderCards(block, []).catch(() => {});
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
   isSignedInUser()
     .then((signedIn) => isPLEligible(signedIn))
     .then(async (isEligible) => {

@@ -77,7 +77,7 @@ async function verifyPLAuth(timeoutMs = 10000) {
  * @param {number} [timeoutMs]
  * @returns {Promise<boolean>}
  */
-// TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+// TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
 export async function isPLEligible(signedIn = false, timeoutMs = 10000) {
   if (!isFeatureEnabled('isPremiumLearningEnabled')) return false;
   if (!signedIn) return false;

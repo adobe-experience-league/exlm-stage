@@ -98,7 +98,7 @@ export default async function decorate(block) {
   const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
 
   // Non-blocking eligibility check — shimmer stays visible until resolved.
-  // TODO: Remove isSignedInUser call and move signedIn check to isPleligible function once cyclic dependency is resolved.
+  // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
   isSignedInUser()
     .then((signedIn) => isPLEligible(signedIn))
     .then((isEligible) => {
@@ -268,6 +268,12 @@ export default async function decorate(block) {
     })
     .catch((err) => {
       buildCardsShimmer.removeShimmer();
+      if (UEAuthorMode) {
+        showFallbackContentInUEMode(block);
+      } else {
+        block.remove();
+        handleEmptyPremiumLearningSection(premiumLearningSection);
+      }
       /* eslint-disable-next-line no-console */
       console.error(err);
     });
