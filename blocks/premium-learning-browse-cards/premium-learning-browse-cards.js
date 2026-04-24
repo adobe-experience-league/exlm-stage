@@ -40,11 +40,11 @@ export default async function decorate(block) {
         ${title ? `<div class="premium-learning-browse-cards-title">${titleElement?.innerHTML || ''}</div>` : ''}
         ${description ? `<div class="premium-learning-browse-cards-description">${description}</div>` : ''}
       </div>
-      <div class="premium-learning-browse-cards-cta">
+      <div class="premium-learning-browse-cards-cta" style="display:none">
         ${cta}
       </div>
     </div>
-     `;
+  `;
   block.appendChild(headerDiv);
 
   const buildCardsShimmer = new BrowseCardShimmer(noOfResults, contentType);
