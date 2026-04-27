@@ -289,7 +289,6 @@ export default async function decorate(block) {
           'Active',
         );
 
-        // eslint-disable-next-line no-await-in-loop
         while (result) {
           const nonCompleted = (result.data || []).filter((enrollment) => enrollment.attributes?.state !== 'COMPLETED');
           const remaining = 4 - allData.length;
