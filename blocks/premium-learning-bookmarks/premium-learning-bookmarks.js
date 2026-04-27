@@ -57,7 +57,7 @@ function renderPagination(block) {
   const paginationEl = htmlToElement(`
     <div class="premium-learning-bookmarks-pagination">
       <button class="nav-arrow" aria-label="previous page"></button>
-      <input type="number" min="1" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
+      <input type="number" min="1" max="${totalPages}" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
       <span class="pagination-text">${getPaginationText(totalPages)}</span>
       <button class="nav-arrow right-nav-arrow" aria-label="next page"></button>
     </div>
@@ -220,6 +220,8 @@ export default async function decorate(block) {
 
           if (cardModels.length === 0) {
             // Clear entire block if no bookmarks
+            allCardModels = [];
+            currentPage = 1;
             block.innerHTML = '';
             block.classList.add('pl-bookmarks-empty');
             return;
@@ -244,6 +246,8 @@ export default async function decorate(block) {
 
               if (updatedCardModels.length === 0) {
                 // Clear entire block if no bookmarks
+                allCardModels = [];
+                currentPage = 1;
                 block.innerHTML = '';
                 block.classList.add('pl-bookmarks-empty');
               } else {
