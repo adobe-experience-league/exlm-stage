@@ -621,10 +621,9 @@ export default class PLDataService {
 /**
  * Fetches next page of enrollments using cursor URL
  * @param {string} cursorUrl - Next page URL from links.next
- * @param {Object} config - Config object (from getConfig())
  * @returns {Promise<Object|null>} Enrollment data or null on error
  */
-export async function fetchNextEnrollmentPage(cursorUrl, config) {
+export async function fetchNextEnrollmentPage(cursorUrl) {
   try {
     const headers = PLDataService.buildRequestHeaders();
     const response = await fetch(cursorUrl, {

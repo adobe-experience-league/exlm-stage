@@ -280,9 +280,6 @@ export default async function decorate(block) {
       try {
         const allData = [];
         const allIncluded = [];
-        let nextUrl = null;
-        let pageCount = 0;
-        const maxPages = 5;
 
         let result = await fetchUserEnrollments(
           config,
@@ -292,7 +289,8 @@ export default async function decorate(block) {
           'Active',
         );
 
-        while (result && pageCount < maxPages) {
+        // eslint-disable-next-line no-await-in-loop
+        while (result) {
           const nonCompleted = (result.data || []).filter((enrollment) => enrollment.attributes?.state !== 'COMPLETED');
           allData.push(...nonCompleted);
 
@@ -307,11 +305,11 @@ export default async function decorate(block) {
 
           if (allData.length >= 4) break;
 
-          nextUrl = result.links?.next;
+          const nextUrl = result.links?.next;
           if (!nextUrl) break;
 
+          // eslint-disable-next-line no-await-in-loop
           result = await fetchNextEnrollmentPage(nextUrl, config);
-          pageCount += 1;
         }
 
         const activeEnrollments = allData.slice(0, 4);
