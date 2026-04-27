@@ -2,6 +2,7 @@ import { createTag, fetchLanguagePlaceholders, getConfig } from '../../scripts/s
 import decorateCustomButtons from '../../scripts/utils/button-utils.js';
 import {
   fetchUserEnrollments,
+  fetchNextEnrollmentPage,
   fetchCohortProgress,
   getEngagementBoardId,
   fetchBoardPosts,
@@ -145,7 +146,6 @@ async function buildCarouselSlide(cardData, progressData, totalReplies, placehol
   // Add metadata below card title
   const titleElement = cohortCardWrapper.querySelector('.premium-learning-card-title');
   const metaParts = [
-    cardData.meta?.duration,
     cardData.meta?.level,
     cardData.meta?.rating?.average > 0
       ? `${cardData.meta.rating.average.toFixed(1)} <span class="rating-star">★</span>`
@@ -278,32 +278,48 @@ export default async function decorate(block) {
       }
 
       try {
-        const enrollmentData = await fetchUserEnrollments(
+        const allData = [];
+        const allIncluded = [];
+        let nextUrl = null;
+        let pageCount = 0;
+        const maxPages = 5;
+
+        let result = await fetchUserEnrollments(
           config,
           'learningProgram',
-          4,
+          10,
           'learningObject,learningObject.instances',
+          'Active',
         );
 
-        const activeInstances =
-          enrollmentData?.included?.filter(
-            (item) => item.type === 'learningObjectInstance' && item.attributes?.state === 'Active',
-          ) || [];
+        while (result && pageCount < maxPages) {
+          const nonCompleted = (result.data || []).filter((enrollment) => enrollment.attributes?.state !== 'COMPLETED');
+          allData.push(...nonCompleted);
 
-        const activeInstanceIds = new Set(activeInstances.map((instance) => instance.id));
+          if (result.included) {
+            const existingIds = new Set(allIncluded.map((item) => item.id));
+            result.included.forEach((item) => {
+              if (!existingIds.has(item.id)) {
+                allIncluded.push(item);
+              }
+            });
+          }
 
-        // Filter enrollments to only include active instances
-        const allEnrollments = (enrollmentData?.data || []).filter((enrollment) => {
-          const hasActiveInstance =
-            enrollment.relationships?.loInstance?.data?.id &&
-            activeInstanceIds.has(enrollment.relationships.loInstance.data.id);
-          const isNotCompleted = enrollment.attributes?.state !== 'COMPLETED';
-          return hasActiveInstance && isNotCompleted;
-        });
+          if (allData.length >= 4) break;
+
+          nextUrl = result.links?.next;
+          if (!nextUrl) break;
+
+          result = await fetchNextEnrollmentPage(nextUrl, config);
+          pageCount += 1;
+        }
+
+        const activeEnrollments = allData.slice(0, 4);
+        const enrollmentData = { data: activeEnrollments, included: allIncluded };
 
         // Get learning object IDs from active enrollments
         const activeLearningObjectIds = new Set(
-          allEnrollments.map((enrollment) => enrollment.relationships?.learningObject?.data?.id).filter(Boolean),
+          activeEnrollments.map((enrollment) => enrollment.relationships?.learningObject?.data?.id).filter(Boolean),
         );
 
         // Filter learning objects to only include active ones
