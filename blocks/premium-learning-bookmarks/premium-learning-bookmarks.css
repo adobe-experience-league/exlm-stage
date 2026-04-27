@@ -1,7 +1,4 @@
-.premium-learning-bookmarks.pl-bookmarks-empty {
-  display: none;
-}
-
+.premium-learning-bookmarks.pl-bookmarks-empty,
 .section.premium-learning-section:has(.premium-learning-bookmarks.pl-bookmarks-empty) {
   display: none;
 }
