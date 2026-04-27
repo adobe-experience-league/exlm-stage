@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-
-# LLM guidance file
-# https://experienceleague.adobe.com/llms.txt
-
-Sitemap: https://experienceleague.adobe.com/sitemap-index.xml
