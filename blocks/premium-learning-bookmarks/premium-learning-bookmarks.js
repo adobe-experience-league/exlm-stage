@@ -1,5 +1,5 @@
 /* eslint-disable no-use-before-define */
-import { htmlToElement } from '../../scripts/scripts.js';
+import { htmlToElement, fetchLanguagePlaceholders } from '../../scripts/scripts.js';
 import { buildPLCard } from '../../scripts/browse-card/browse-cards-premium-learning.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
@@ -10,12 +10,119 @@ import PL_CONTENT_TYPES from '../../scripts/data-service/premium-learning/premiu
 import BrowseCardsPLAdaptor from '../../scripts/browse-card/browse-cards-premium-learning-adaptor.js';
 
 const bookmarksEventEmitter = getEmitter('pl-bookmarks');
+let placeholders = {};
+try {
+  placeholders = await fetchLanguagePlaceholders();
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error('Error fetching placeholders:', err);
+}
 
 const SHIMMER_COUNT = 4;
 const BATCH_SIZE = 6;
+const CARDS_PER_PAGE = 4;
+
+// Pagination state
+let allCardModels = [];
+let currentPage = 1;
 
 /**
- * Renders bookmark cards in batches
+ * Get pagination text
+ * @param {number} totalPages - Total number of pages
+ * @returns {string} Pagination text
+ */
+function getPaginationText(totalPages) {
+  if (totalPages > 1) {
+    return placeholders?.filterPagesLabel
+      ? placeholders?.filterPagesLabel?.replace('{}', totalPages)
+      : `of ${totalPages} pages`;
+  }
+  return placeholders?.filterPageLabel
+    ? placeholders?.filterPageLabel?.replace('{}', totalPages)
+    : `of ${totalPages} page`;
+}
+
+/**
+ * Renders pagination controls
+ * @param {HTMLElement} block - The block element
+ */
+function renderPagination(block) {
+  const totalPages = Math.ceil(allCardModels.length / CARDS_PER_PAGE);
+
+  // Remove existing pagination if any
+  block.querySelector('.premium-learning-bookmarks-pagination')?.remove();
+
+  if (totalPages <= 1) return;
+
+  const paginationEl = htmlToElement(`
+    <div class="premium-learning-bookmarks-pagination">
+      <button class="nav-arrow" aria-label="previous page"></button>
+      <input type="text" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
+      <span class="pagination-text">${getPaginationText(totalPages)}</span>
+      <button class="nav-arrow right-nav-arrow" aria-label="next page"></button>
+    </div>
+  `);
+
+  // Handle navigation buttons
+  const [prevBtn, nextBtn] = paginationEl.querySelectorAll('.nav-arrow');
+
+  prevBtn.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage -= 1;
+      renderCurrentPage(block);
+    }
+  });
+
+  nextBtn.addEventListener('click', () => {
+    if (currentPage < totalPages) {
+      currentPage += 1;
+      renderCurrentPage(block);
+    }
+  });
+
+  // Handle page input
+  const pageInput = paginationEl.querySelector('.bookmarks-pg-input');
+  pageInput.addEventListener('change', (e) => {
+    let newPage = parseInt(e.target.value, 10);
+    if (newPage < 1) newPage = 1;
+    if (newPage > totalPages) newPage = totalPages;
+    if (Number.isNaN(newPage)) newPage = currentPage;
+
+    currentPage = newPage;
+    e.target.value = currentPage;
+    renderCurrentPage(block);
+  });
+
+  // Update button states
+  prevBtn.disabled = currentPage === 1;
+  nextBtn.disabled = currentPage === totalPages;
+  prevBtn.classList.toggle('nav-arrow-hidden', currentPage === 1);
+  nextBtn.classList.toggle('nav-arrow-hidden', currentPage === totalPages);
+
+  block.appendChild(paginationEl);
+}
+
+/**
+ * Renders current page of bookmark cards
+ * @param {HTMLElement} block - The block element
+ * @param {boolean} shouldScroll - Whether to scroll to block (default: true)
+ */
+async function renderCurrentPage(block, shouldScroll = true) {
+  const startIdx = (currentPage - 1) * CARDS_PER_PAGE;
+  const endIdx = startIdx + CARDS_PER_PAGE;
+  const pageCardModels = allCardModels.slice(startIdx, endIdx);
+
+  await renderCards(block, pageCardModels);
+  renderPagination(block);
+
+  // Only scroll on user-initiated navigation
+  if (shouldScroll) {
+    block.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+}
+
+/**
+ * Renders bookmark cards in batches with shimmer
  * @param {HTMLElement} block - The block element
  * @param {Array} cardModels - Array of card model data from adaptor
  */
@@ -112,11 +219,15 @@ export default async function decorate(block) {
           );
 
           if (cardModels.length === 0) {
-            // Remove shimmer content if no bookmarks
-            block.querySelector('.premium-learning-bookmarks-content')?.remove();
+            // Clear entire block if no bookmarks
+            block.innerHTML = '';
             block.classList.add('pl-bookmarks-empty');
             return;
           }
+
+          // Store all card models for pagination
+          allCardModels = cardModels;
+          currentPage = 1;
 
           // Store bookmarks in event emitter for potential updates
           bookmarksEventEmitter.set('bookmark_data', cardModels);
@@ -130,13 +241,16 @@ export default async function decorate(block) {
                   ? { data: updatedResponseData.data, included: updatedResponseData.included ?? [] }
                   : { data: [], included: [] },
               );
-              const existingContent = block.querySelector('.premium-learning-bookmarks-content');
+
               if (updatedCardModels.length === 0) {
-                if (existingContent) existingContent.remove();
+                // Clear entire block if no bookmarks
+                block.innerHTML = '';
                 block.classList.add('pl-bookmarks-empty');
               } else {
                 block.classList.remove('pl-bookmarks-empty');
-                await renderCards(block, updatedCardModels);
+                allCardModels = updatedCardModels;
+                currentPage = 1;
+                await renderCurrentPage(block);
               }
             } catch (error) {
               // eslint-disable-next-line no-console
@@ -144,8 +258,8 @@ export default async function decorate(block) {
             }
           });
 
-          // Render actual cards
-          await renderCards(block, cardModels);
+          // Render first page (no scroll on initial load)
+          await renderCurrentPage(block, false);
         })
         .catch((error) => {
           // eslint-disable-next-line no-console

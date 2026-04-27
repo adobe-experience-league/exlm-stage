@@ -191,6 +191,10 @@ export async function sanitizeBookmarks() {
 
 // ========== PREMIUM LEARNING BOOKMARKS ==========
 
+// Cache of bookmarked learning object IDs for quick lookup
+const plBookmarkedIds = new Set();
+let plBookmarksFetched = false; // Track if we've fetched at least once
+
 /**
  * Fetches PL bookmarks or checks if a specific item is bookmarked
  * @param {string} [loId] - Optional learning object ID to check
@@ -203,32 +207,50 @@ export async function fetchPremiumLearningBookmarks(loId = null) {
 
     if (!token) return loId ? false : { data: [], included: [] };
 
-    const response = await fetch(
-      `${plApiBaseUrl}/learningObjects?include=instances&page[limit]=10&filter.loTypes=course,learningProgram&filter.bookmarks=true&sort=name&filter.ignoreEnhancedLP=true`,
-      {
+    // Fetch all pages using cursor-based pagination
+    let allData = [];
+    let allIncluded = [];
+    let nextUrl = `${plApiBaseUrl}/learningObjects?include=instances&page[limit]=10&filter.loTypes=course,learningProgram&filter.bookmarks=true&sort=name&filter.ignoreEnhancedLP=true`;
+
+    // eslint-disable-next-line no-await-in-loop
+    while (nextUrl) {
+      // eslint-disable-next-line no-await-in-loop
+      const response = await fetch(nextUrl, {
         headers: {
           Authorization: `Bearer ${token}`,
           Accept: 'application/vnd.api+json',
         },
-      },
-    );
+      });
 
-    if (!response.ok) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to fetch PL bookmarks:', response.status);
-      return loId ? false : { data: [], included: [] };
+      if (!response.ok) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to fetch PL bookmarks:', response.status);
+        return loId ? false : { data: allData, included: allIncluded };
+      }
+
+      // eslint-disable-next-line no-await-in-loop
+      const pageData = await response.json();
+
+      // Accumulate data and included from this page
+      allData = allData.concat(pageData.data || []);
+      allIncluded = allIncluded.concat(pageData.included || []);
+
+      // Check for next page link
+      nextUrl = pageData.links?.next || null;
     }
 
-    const data = await response.json();
+    // Update the cached Set with all bookmarked IDs
+    plBookmarkedIds.clear();
+    allData.forEach((bookmark) => plBookmarkedIds.add(bookmark.id));
+    plBookmarksFetched = true; // Mark as fetched
 
-    // If loId provided, return true/false
+    // If loId provided, return true/false using the Set
     if (loId) {
-      const bookmarks = data?.data || [];
-      return bookmarks.some((bookmark) => bookmark.id === loId);
+      return plBookmarkedIds.has(loId);
     }
 
     // Otherwise return full response data for adaptor processing
-    return data;
+    return { data: allData, included: allIncluded };
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error fetching PL bookmarks:', error);
@@ -263,8 +285,13 @@ export async function decoratePremiumLearningBookmark(config) {
     return;
   }
 
-  // Check if already bookmarked
-  const plBookmarked = await fetchPremiumLearningBookmarks(loId);
+  // Ensure Set is populated before checking (fetch once if not already done)
+  if (!plBookmarksFetched) {
+    // First call - populate the Set by fetching all bookmarks
+    await fetchPremiumLearningBookmarks();
+  }
+
+  const plBookmarked = plBookmarkedIds.has(loId);
   element.dataset.bookmarked = String(plBookmarked);
 
   const bookmarkTooltip = htmlToElement(
@@ -311,6 +338,13 @@ export async function premiumLearningBookmarkHandler(config) {
     });
 
     if (response.ok) {
+      // Update cached Set to keep it in sync
+      if (isCurrentlyBookmarked) {
+        plBookmarkedIds.delete(loId);
+      } else {
+        plBookmarkedIds.add(loId);
+      }
+
       element.dataset.bookmarked = String(!isCurrentlyBookmarked);
       const message = isCurrentlyBookmarked
         ? tooltips?.removeBookmarkToastText || 'Bookmark removed'
