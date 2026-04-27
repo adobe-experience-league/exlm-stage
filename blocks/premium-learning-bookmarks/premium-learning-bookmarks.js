@@ -69,14 +69,20 @@ function renderPagination(block) {
   prevBtn.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage -= 1;
-      renderCurrentPage(block);
+      renderCurrentPage(block).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('Error rendering page:', err);
+      });
     }
   });
 
   nextBtn.addEventListener('click', () => {
     if (currentPage < totalPages) {
       currentPage += 1;
-      renderCurrentPage(block);
+      renderCurrentPage(block).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('Error rendering page:', err);
+      });
     }
   });
 
@@ -90,7 +96,10 @@ function renderPagination(block) {
 
     currentPage = newPage;
     e.target.value = currentPage;
-    renderCurrentPage(block);
+    renderCurrentPage(block).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error('Error rendering page:', err);
+    });
   });
 
   // Update button states
