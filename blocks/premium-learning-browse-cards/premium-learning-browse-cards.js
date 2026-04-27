@@ -40,7 +40,7 @@ export default async function decorate(block) {
         ${title ? `<div class="premium-learning-browse-cards-title">${titleElement?.innerHTML || ''}</div>` : ''}
         ${description ? `<div class="premium-learning-browse-cards-description">${description}</div>` : ''}
       </div>
-      <div class="premium-learning-browse-cards-cta" style="display:none">
+      <div class="premium-learning-browse-cards-cta">
         ${cta}
       </div>
     </div>
