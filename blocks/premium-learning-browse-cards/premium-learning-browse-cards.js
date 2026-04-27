@@ -129,8 +129,6 @@ export default async function decorate(block) {
               }
             }
           } else {
-            const ctaContainer = block.querySelector('.premium-learning-browse-cards-cta');
-            if (ctaContainer) ctaContainer.classList.add('hidden');
             const noResultsText =
               placeholders.noResultsTextBrowse || 'We are sorry, no results found matching the criteria.';
             const noResultsDiv = htmlToElement(`<div class="browse-card-no-results">${noResultsText}</div>`);
