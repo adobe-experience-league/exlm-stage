@@ -292,7 +292,8 @@ export default async function decorate(block) {
         // eslint-disable-next-line no-await-in-loop
         while (result) {
           const nonCompleted = (result.data || []).filter((enrollment) => enrollment.attributes?.state !== 'COMPLETED');
-          allData.push(...nonCompleted);
+          const remaining = 4 - allData.length;
+          allData.push(...nonCompleted.slice(0, remaining));
 
           if (result.included) {
             const existingIds = new Set(allIncluded.map((item) => item.id));
@@ -309,7 +310,7 @@ export default async function decorate(block) {
           if (!nextUrl) break;
 
           // eslint-disable-next-line no-await-in-loop
-          result = await fetchNextEnrollmentPage(nextUrl, config);
+          result = await fetchNextEnrollmentPage(nextUrl);
         }
 
         const activeEnrollments = allData.slice(0, 4);
