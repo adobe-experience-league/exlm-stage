@@ -40,7 +40,7 @@ export default async function decorate(block) {
         ${title ? `<div class="premium-learning-browse-cards-title">${titleElement?.innerHTML || ''}</div>` : ''}
         ${description ? `<div class="premium-learning-browse-cards-description">${description}</div>` : ''}
       </div>
-      <div class="premium-learning-browse-cards-cta">
+      <div class="premium-learning-browse-cards-cta hidden">
         ${cta}
       </div>
     </div>
@@ -123,12 +123,14 @@ export default async function decorate(block) {
             const ctaContainer = block.querySelector('.premium-learning-browse-cards-cta');
             if (ctaContainer) {
               if (sortedData.length > noOfResults) {
-                ctaContainer.style.display = '';
+                ctaContainer.classList.remove('hidden');
               } else {
-                ctaContainer.style.display = 'none';
+                ctaContainer.classList.add('hidden');
               }
             }
           } else {
+            const ctaContainer = block.querySelector('.premium-learning-browse-cards-cta');
+            if (ctaContainer) ctaContainer.classList.add('hidden');
             const noResultsText =
               placeholders.noResultsTextBrowse || 'We are sorry, no results found matching the criteria.';
             const noResultsDiv = htmlToElement(`<div class="browse-card-no-results">${noResultsText}</div>`);

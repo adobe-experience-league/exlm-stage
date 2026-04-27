@@ -25,6 +25,14 @@
 }
 
 /* CTA Button Styling */
+.premium-learning-browse-cards .premium-learning-browse-cards-cta {
+  display: block;
+}
+
+.premium-learning-browse-cards .premium-learning-browse-cards-cta.hidden {
+  display: none;
+}
+
 .premium-learning-browse-cards .premium-learning-browse-cards-cta a.button:any-link {
   margin: 0 0 var(--spectrum-spacing-200);
   display: flex;
@@ -33,8 +41,6 @@
   text-align: center;
   gap: var(--spectrum-spacing-100);
   white-space: normal;
-  overflow: visible;
-  text-overflow: clip;
 }
 
 .premium-learning-browse-cards.browse-cards-block {
