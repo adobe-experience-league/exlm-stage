@@ -20,7 +20,7 @@ try {
 
 const SHIMMER_COUNT = 4;
 const BATCH_SIZE = 6;
-const CARDS_PER_PAGE = 4;
+const CARDS_PER_PAGE = 12;
 
 // Pagination state
 let allCardModels = [];
@@ -57,7 +57,7 @@ function renderPagination(block) {
   const paginationEl = htmlToElement(`
     <div class="premium-learning-bookmarks-pagination">
       <button class="nav-arrow" aria-label="previous page"></button>
-      <input type="text" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
+      <input type="number" min="1" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
       <span class="pagination-text">${getPaginationText(totalPages)}</span>
       <button class="nav-arrow right-nav-arrow" aria-label="next page"></button>
     </div>
@@ -84,9 +84,9 @@ function renderPagination(block) {
   const pageInput = paginationEl.querySelector('.bookmarks-pg-input');
   pageInput.addEventListener('change', (e) => {
     let newPage = parseInt(e.target.value, 10);
+    if (Number.isNaN(newPage)) newPage = currentPage;
     if (newPage < 1) newPage = 1;
     if (newPage > totalPages) newPage = totalPages;
-    if (Number.isNaN(newPage)) newPage = currentPage;
 
     currentPage = newPage;
     e.target.value = currentPage;

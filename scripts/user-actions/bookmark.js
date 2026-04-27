@@ -193,7 +193,8 @@ export async function sanitizeBookmarks() {
 
 // Cache of bookmarked learning object IDs for quick lookup
 const plBookmarkedIds = new Set();
-let plBookmarksFetched = false; // Track if we've fetched at least once
+let plBookmarksFetched = false;
+let plFetchPromise = null;
 
 /**
  * Fetches PL bookmarks or checks if a specific item is bookmarked
@@ -259,6 +260,20 @@ export async function fetchPremiumLearningBookmarks(loId = null) {
 }
 
 /**
+ * Ensures PL bookmarks are fetched, sharing one fetch across concurrent callers
+ * @returns {Promise<void>}
+ */
+async function ensurePLBookmarksFetched() {
+  if (plBookmarksFetched) return;
+  if (!plFetchPromise) {
+    plFetchPromise = fetchPremiumLearningBookmarks().finally(() => {
+      plFetchPromise = null;
+    });
+  }
+  await plFetchPromise;
+}
+
+/**
  * Decorates a PL bookmark button (reuses decorateBookmark logic for consistency)
  *
  * @param {Object} config
@@ -285,11 +300,8 @@ export async function decoratePremiumLearningBookmark(config) {
     return;
   }
 
-  // Ensure Set is populated before checking (fetch once if not already done)
-  if (!plBookmarksFetched) {
-    // First call - populate the Set by fetching all bookmarks
-    await fetchPremiumLearningBookmarks();
-  }
+  // Ensure Set is populated before checking (shares one fetch across concurrent callers)
+  await ensurePLBookmarksFetched();
 
   const plBookmarked = plBookmarkedIds.has(loId);
   element.dataset.bookmarked = String(plBookmarked);
