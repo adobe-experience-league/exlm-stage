@@ -10,13 +10,6 @@ import PL_CONTENT_TYPES from '../../scripts/data-service/premium-learning/premiu
 import BrowseCardsPLAdaptor from '../../scripts/browse-card/browse-cards-premium-learning-adaptor.js';
 
 const bookmarksEventEmitter = getEmitter('pl-bookmarks');
-let placeholders = {};
-try {
-  placeholders = await fetchLanguagePlaceholders();
-} catch (err) {
-  // eslint-disable-next-line no-console
-  console.error('Error fetching placeholders:', err);
-}
 
 const SHIMMER_COUNT = 4;
 const BATCH_SIZE = 6;
@@ -29,24 +22,26 @@ let currentPage = 1;
 /**
  * Get pagination text
  * @param {number} totalPages - Total number of pages
+ * @param {Object} placeHolders - Language placeholders object
  * @returns {string} Pagination text
  */
-function getPaginationText(totalPages) {
+function getPaginationText(totalPages, placeHolders) {
   if (totalPages > 1) {
-    return placeholders?.filterPagesLabel
-      ? placeholders?.filterPagesLabel?.replace('{}', totalPages)
+    return placeHolders?.filterPagesLabel
+      ? placeHolders?.filterPagesLabel?.replace('{}', totalPages)
       : `of ${totalPages} pages`;
   }
-  return placeholders?.filterPageLabel
-    ? placeholders?.filterPageLabel?.replace('{}', totalPages)
+  return placeHolders?.filterPageLabel
+    ? placeHolders?.filterPageLabel?.replace('{}', totalPages)
     : `of ${totalPages} page`;
 }
 
 /**
  * Renders pagination controls
  * @param {HTMLElement} block - The block element
+ * @param {Object} placeHolders - Language placeholders object
  */
-function renderPagination(block) {
+function renderPagination(block, placeHolders) {
   const totalPages = Math.ceil(allCardModels.length / CARDS_PER_PAGE);
 
   // Remove existing pagination if any
@@ -58,7 +53,7 @@ function renderPagination(block) {
     <div class="premium-learning-bookmarks-pagination">
       <button class="nav-arrow" aria-label="previous page"></button>
       <input type="number" min="1" max="${totalPages}" class="bookmarks-pg-input" aria-label="Enter page number" value="${currentPage}">
-      <span class="pagination-text">${getPaginationText(totalPages)}</span>
+      <span class="pagination-text">${getPaginationText(totalPages, placeHolders)}</span>
       <button class="nav-arrow right-nav-arrow" aria-label="next page"></button>
     </div>
   `);
@@ -69,7 +64,7 @@ function renderPagination(block) {
   prevBtn.addEventListener('click', () => {
     if (currentPage > 1) {
       currentPage -= 1;
-      renderCurrentPage(block).catch((err) => {
+      renderCurrentPage(block, placeHolders).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('Error rendering page:', err);
       });
@@ -79,7 +74,7 @@ function renderPagination(block) {
   nextBtn.addEventListener('click', () => {
     if (currentPage < totalPages) {
       currentPage += 1;
-      renderCurrentPage(block).catch((err) => {
+      renderCurrentPage(block, placeHolders).catch((err) => {
         // eslint-disable-next-line no-console
         console.error('Error rendering page:', err);
       });
@@ -96,7 +91,7 @@ function renderPagination(block) {
 
     currentPage = newPage;
     e.target.value = currentPage;
-    renderCurrentPage(block).catch((err) => {
+    renderCurrentPage(block, placeHolders).catch((err) => {
       // eslint-disable-next-line no-console
       console.error('Error rendering page:', err);
     });
@@ -114,15 +109,16 @@ function renderPagination(block) {
 /**
  * Renders current page of bookmark cards
  * @param {HTMLElement} block - The block element
+ * @param {Object} placeHolders - Language placeholders object
  * @param {boolean} shouldScroll - Whether to scroll to block (default: true)
  */
-async function renderCurrentPage(block, shouldScroll = true) {
+async function renderCurrentPage(block, placeHolders, shouldScroll = true) {
   const startIdx = (currentPage - 1) * CARDS_PER_PAGE;
   const endIdx = startIdx + CARDS_PER_PAGE;
   const pageCardModels = allCardModels.slice(startIdx, endIdx);
 
   await renderCards(block, pageCardModels);
-  renderPagination(block);
+  renderPagination(block, placeHolders);
 
   // Only scroll on user-initiated navigation
   if (shouldScroll) {
@@ -187,6 +183,15 @@ async function renderCards(block, cardModels) {
  * @param {HTMLElement} block - The block element to decorate
  */
 export default async function decorate(block) {
+  // Fetch placeholders for pagination text
+  let placeholders = {};
+  try {
+    placeholders = await fetchLanguagePlaceholders();
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('Error fetching placeholders:', err);
+  }
+
   const [headerWrapper] = block.children;
   const header = headerWrapper?.firstElementChild?.firstElementChild;
   const headerHTML = header?.outerHTML || '<h2>My Bookmarks</h2>';
@@ -263,7 +268,7 @@ export default async function decorate(block) {
                 block.classList.remove('pl-bookmarks-empty');
                 allCardModels = updatedCardModels;
                 currentPage = 1;
-                await renderCurrentPage(block);
+                await renderCurrentPage(block, placeholders, false);
               }
             } catch (error) {
               // eslint-disable-next-line no-console
@@ -272,7 +277,7 @@ export default async function decorate(block) {
           });
 
           // Render first page (no scroll on initial load)
-          await renderCurrentPage(block, false);
+          await renderCurrentPage(block, placeholders, false);
         })
         .catch((error) => {
           // eslint-disable-next-line no-console
