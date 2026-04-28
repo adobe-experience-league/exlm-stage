@@ -289,7 +289,6 @@ export default async function decorate(block) {
           'Active',
         );
 
-        // eslint-disable-next-line no-await-in-loop
         while (result) {
           const nonCompleted = (result.data || []).filter((enrollment) => enrollment.attributes?.state !== 'COMPLETED');
           const remaining = 4 - allData.length;
@@ -313,12 +312,11 @@ export default async function decorate(block) {
           result = await fetchNextEnrollmentPage(nextUrl);
         }
 
-        const activeEnrollments = allData.slice(0, 4);
-        const enrollmentData = { data: activeEnrollments, included: allIncluded };
+        const enrollmentData = { data: allData, included: allIncluded };
 
         // Get learning object IDs from active enrollments
         const activeLearningObjectIds = new Set(
-          activeEnrollments.map((enrollment) => enrollment.relationships?.learningObject?.data?.id).filter(Boolean),
+          allData.map((enrollment) => enrollment.relationships?.learningObject?.data?.id).filter(Boolean),
         );
 
         // Filter learning objects to only include active ones
