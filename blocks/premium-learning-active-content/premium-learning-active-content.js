@@ -387,9 +387,8 @@ export default async function decorate(block) {
         block.appendChild(carouselContainer);
         initCarousel(carouselContainer);
       } catch (err) {
-        if (!UEAuthorMode) {
-          block.remove();
-        }
+        if (UEAuthorMode) showFallbackContentInUEMode(block);
+        else block.remove();
         // eslint-disable-next-line no-console
         console.error('Error fetching active content:', err);
       }
