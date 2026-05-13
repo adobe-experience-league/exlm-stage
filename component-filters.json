@@ -92,6 +92,7 @@
       "events",
       "featured-cards",
       "events-cards",
+      "events-search",
       "adls-cards",
       "tabbed-cards",
       "tabs",
@@ -128,7 +129,8 @@
       "slides",
       "quiz-scorecard",
       "grid-cards",
-      "playlist-embed"
+      "playlist-embed",
+      "premium-learning-profile-badges"
     ]
   },
   {
@@ -330,7 +332,8 @@
       "personalized-content-placeholder",
       "announcement-ribbon",
       "recently-reviewed",
-      "qualtrics"
+      "qualtrics",
+      "premium-learning-profile-badges"
     ]
   },
   {
@@ -443,7 +446,8 @@
       "premium-learning-active-content",
       "premium-learning-suggested-content",
       "premium-learning-recommended-content",
-      "premium-learning-bookmarks"
+      "premium-learning-bookmarks",
+      "premium-learning-profile-badges"
     ]
   },
   {
