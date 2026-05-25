@@ -66,7 +66,8 @@ export default async function decorate(block) {
       .filter(Boolean);
   }
 
-  const noOfResults = 4;
+  const FETCH_LIMIT = 10;
+  const DISPLAY_LIMIT = 4;
 
   // Clearing the block's content
   block.innerHTML = '';
@@ -89,10 +90,10 @@ export default async function decorate(block) {
 
   const param = {
     contentType, // Can be string ('premium-learning-course' or 'premium-learning-cohort') or array (['premium-learning-course', 'premium-learning-cohort'])
-    noOfResults,
+    noOfResults: FETCH_LIMIT,
   };
 
-  const buildCardsShimmer = new BrowseCardShimmer(noOfResults, contentType);
+  const buildCardsShimmer = new BrowseCardShimmer(DISPLAY_LIMIT, contentType);
   buildCardsShimmer.addShimmer(block);
 
   const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
@@ -100,6 +101,19 @@ export default async function decorate(block) {
   let lastSearchQuery = null;
   let fetchAndRenderCardsRef = null;
   let resolveEligibility;
+  let attachedToAtomicSearch = false;
+
+  function attachToAtomicSearchWrapper(wrapperRoot) {
+    if (attachedToAtomicSearch) return;
+
+    const premiumSearchWrapper = wrapperRoot.querySelector('.atomic-search-premium-search-wrapper');
+    if (premiumSearchWrapper) {
+      block.classList.add('premium-learning-search-atomic-search');
+      premiumSearchWrapper.appendChild(block);
+      handleEmptyPremiumLearningSection(premiumLearningSection);
+      attachedToAtomicSearch = true;
+    }
+  }
 
   const eligibilityPromise = new Promise((resolve) => {
     resolveEligibility = resolve;
@@ -114,8 +128,9 @@ export default async function decorate(block) {
           }
 
           const { body, method = '' } = e.detail;
-          if (method === 'search') {
+          if (method === 'search' && body !== undefined) {
             const newQuery = (body?.q ?? '').trim();
+            attachToAtomicSearchWrapper(document);
 
             if (lastSearchQuery === newQuery) {
               return;
@@ -154,25 +169,14 @@ export default async function decorate(block) {
             return;
           }
 
-          const searchInterfaceElement = e.detail?.searchInterface;
-          if (!searchInterfaceElement) {
-            return;
-          }
-
           const searchBlockElement = e.detail?.block;
           if (searchBlockElement) {
             const delta = 30;
             searchBlockElement.classList.add('atomic-search-with-premium-search');
             searchBlockElement.style.setProperty(
               '--atomic-search-skeleton-margin-top',
-              `${block.offsetHeight - delta}px`,
+              `${Math.max(block.offsetHeight - delta, 0)}px`,
             );
-          }
-          block.classList.add('premium-learning-search-atomic-search');
-          const premiumSearchWrapper = searchInterfaceElement.querySelector('.atomic-search-premium-search-wrapper');
-          if (premiumSearchWrapper) {
-            premiumSearchWrapper.appendChild(block);
-            handleEmptyPremiumLearningSection(premiumLearningSection);
           }
         })
         .catch((err) => {
@@ -275,7 +279,7 @@ export default async function decorate(block) {
             buildCardsShimmer.removeShimmer();
             if (data?.length) {
               const contentDiv = createTag('div', { class: 'browse-cards-block-content' });
-              for (let i = 0; i < Math.min(noOfResults, data.length); i += 1) {
+              for (let i = 0; i < Math.min(DISPLAY_LIMIT, data.length); i += 1) {
                 const cardData = data[i];
                 const cardDiv = document.createElement('div');
                 buildCard(cardDiv, cardData);
