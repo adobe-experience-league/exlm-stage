@@ -87,6 +87,16 @@ export default async function decorate(block) {
   const ctaWrapper = createTag('div', { class: 'premium-learning-search-block-cta' });
   ctaWrapper.innerHTML = decorateCustomButtons(ctaElement);
   headerCtaSlot.appendChild(ctaWrapper);
+  const updateCTASearch = (searchString) => {
+    const anchor = ctaWrapper.querySelector('a');
+    const href = anchor?.getAttribute('href');
+
+    if (href) {
+      const url = new URL(href, document.baseURI);
+      url.search = searchString;
+      anchor.setAttribute('href', url.toString());
+    }
+  };
 
   const param = {
     contentType, // Can be string ('premium-learning-course' or 'premium-learning-cohort') or array (['premium-learning-course', 'premium-learning-cohort'])
@@ -102,6 +112,66 @@ export default async function decorate(block) {
   let fetchAndRenderCardsRef = null;
   let resolveEligibility;
   let attachedToAtomicSearch = false;
+  let shimmerRemoveTimer = null;
+  let premiumSearchWrapperRef = null;
+  let premiumSearchResizeObserver = null;
+  const PREMIUM_SEARCH_MAX_WIDTH = 1200;
+
+  function shouldApplyAbsolutePremiumLayout(wrapper = premiumSearchWrapperRef) {
+    const searchLayout = wrapper?.closest('atomic-search-layout');
+    const hasNoResultsChild = !!block.querySelector('.premium-learning-search-no-results');
+    return (
+      !!searchLayout &&
+      searchLayout.classList.contains('no-results') &&
+      !!searchLayout.querySelector('.all-facets-hidden') &&
+      !hasNoResultsChild
+    );
+  }
+
+  function syncPremiumSearchWrapperLayout(wrapper = premiumSearchWrapperRef) {
+    if (!wrapper) return;
+    if (!shouldApplyAbsolutePremiumLayout(wrapper)) {
+      wrapper.style.removeProperty('--premium-learning-search-left');
+      wrapper.style.setProperty('--atomic-search-premium-search-height', '0px');
+      return;
+    }
+
+    const wrapperRect = wrapper.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const effectiveWidth = Math.min(viewportWidth, viewportWidth * 0.9, PREMIUM_SEARCH_MAX_WIDTH);
+    const viewportCenteredLeft = (viewportWidth - effectiveWidth) / 2;
+    const leftOffset = Math.round(viewportCenteredLeft - wrapperRect.left);
+    wrapper.style.setProperty('--premium-learning-search-left', `${leftOffset}px`);
+    wrapper.style.setProperty('--atomic-search-premium-search-height', `${Math.max(block.offsetHeight, 0)}px`);
+  }
+
+  function schedulePremiumSearchLayoutSync() {
+    syncPremiumSearchWrapperLayout();
+  }
+
+  function observePremiumSearchLayout() {
+    if (premiumSearchResizeObserver || !window.ResizeObserver) return;
+
+    premiumSearchResizeObserver = new window.ResizeObserver(() => {
+      schedulePremiumSearchLayoutSync();
+    });
+    premiumSearchResizeObserver.observe(block);
+    if (premiumSearchWrapperRef) {
+      premiumSearchResizeObserver.observe(premiumSearchWrapperRef);
+    }
+  }
+
+  function disconnectPremiumSearchLayoutObservers() {
+    premiumSearchResizeObserver?.disconnect();
+    premiumSearchResizeObserver = null;
+  }
+
+  function clearPendingShimmerRemoval() {
+    if (shimmerRemoveTimer) {
+      clearTimeout(shimmerRemoveTimer);
+      shimmerRemoveTimer = null;
+    }
+  }
 
   function attachToAtomicSearchWrapper(wrapperRoot) {
     if (attachedToAtomicSearch) return;
@@ -110,6 +180,9 @@ export default async function decorate(block) {
     if (premiumSearchWrapper) {
       block.classList.add('premium-learning-search-atomic-search');
       premiumSearchWrapper.appendChild(block);
+      premiumSearchWrapperRef = premiumSearchWrapper;
+      syncPremiumSearchWrapperLayout(premiumSearchWrapper);
+      observePremiumSearchLayout();
       handleEmptyPremiumLearningSection(premiumLearningSection);
       attachedToAtomicSearch = true;
     }
@@ -145,15 +218,7 @@ export default async function decorate(block) {
             }
             buildCardsShimmer.addShimmer(block);
 
-            fetchAndRenderCardsRef(param);
-
-            const anchor = ctaWrapper.querySelector('a');
-            const href = anchor?.getAttribute('href');
-            if (href) {
-              const url = new URL(href, document.baseURI);
-              url.search = urlString;
-              anchor.setAttribute('href', url.toString());
-            }
+            fetchAndRenderCardsRef({ ...param, searchUrlString: urlString });
           }
         })
         .catch((err) => {
@@ -177,6 +242,7 @@ export default async function decorate(block) {
               '--atomic-search-skeleton-margin-top',
               `${Math.max(block.offsetHeight - delta, 0)}px`,
             );
+            schedulePremiumSearchLayoutSync();
           }
         })
         .catch((err) => {
@@ -193,6 +259,8 @@ export default async function decorate(block) {
     .then((isEligibleResult) => {
       if (!isEligibleResult) {
         resolveEligibility(false);
+        clearPendingShimmerRemoval();
+        disconnectPremiumSearchLayoutObservers();
         buildCardsShimmer.removeShimmer();
         if (UEAuthorMode) {
           showFallbackContentInUEMode(block);
@@ -261,6 +329,7 @@ export default async function decorate(block) {
         if (show) {
           renderNoResultsContent(blockElement, param.q);
           headerDiv.classList.add('premium-learning-search-hide-content');
+          schedulePremiumSearchLayoutSync();
         } else {
           headerCtaSlot.appendChild(ctaWrapper);
           const noResultsRoot = blockElement.querySelector('.premium-learning-search-no-results');
@@ -272,11 +341,11 @@ export default async function decorate(block) {
       }
 
       function fetchAndRenderCards(params) {
+        clearPendingShimmerRemoval();
         toggleNoResultsContent(block, false);
         const browseCardsContent = BrowseCardsDelegate.fetchCardData(params);
         browseCardsContent
           .then((data) => {
-            buildCardsShimmer.removeShimmer();
             if (data?.length) {
               const contentDiv = createTag('div', { class: 'browse-cards-block-content' });
               for (let i = 0; i < Math.min(DISPLAY_LIMIT, data.length); i += 1) {
@@ -286,11 +355,24 @@ export default async function decorate(block) {
                 contentDiv.appendChild(cardDiv);
               }
               block.appendChild(contentDiv);
+              if (params.searchUrlString) {
+                updateCTASearch(params.searchUrlString);
+              }
+              shimmerRemoveTimer = setTimeout(() => {
+                shimmerRemoveTimer = null;
+                buildCardsShimmer.removeShimmer();
+                schedulePremiumSearchLayoutSync();
+              }, 100);
             } else {
+              buildCardsShimmer.removeShimmer();
               toggleNoResultsContent(block, true);
+              syncPremiumSearchWrapperLayout();
+              updateCTASearch('');
             }
           })
           .catch((err) => {
+            clearPendingShimmerRemoval();
+            disconnectPremiumSearchLayoutObservers();
             buildCardsShimmer.removeShimmer();
             if (UEAuthorMode) {
               showFallbackContentInUEMode(block);
@@ -312,6 +394,8 @@ export default async function decorate(block) {
     })
     .catch((err) => {
       resolveEligibility(false);
+      clearPendingShimmerRemoval();
+      disconnectPremiumSearchLayoutObservers();
       buildCardsShimmer.removeShimmer();
       if (UEAuthorMode) {
         showFallbackContentInUEMode(block);
