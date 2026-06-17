@@ -1,15 +1,19 @@
 import BrowseCardsDelegate from '../../scripts/browse-card/browse-cards-delegate.js';
-import { createTag, fetchLanguagePlaceholders, htmlToElement, getv2TagLabels } from '../../scripts/scripts.js';
+import { createTag, getv2TagLabels } from '../../scripts/scripts.js';
 import { buildCard } from '../../scripts/browse-card/browse-card.js';
 import BrowseCardShimmer from '../../scripts/browse-card/browse-card-shimmer.js';
-import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { isPLEligible, handlePLBlockError } from '../../scripts/utils/premium-learning-utils.js';
 import { isSignedInUser } from '../../scripts/auth/profile.js';
 
 const UEAuthorMode = window.hlx.aemRoot || window.location.href.includes('.html');
 
-function showFallbackContentInUEMode(blockElement) {
+function showFallbackContentInUEMode(blockElement, showNoDataMessage = false) {
   const contentDiv = createTag('div', { class: 'browse-cards-block-content' });
-  contentDiv.textContent = 'This block will load the Premium learning content for Premium users only.';
+  if (showNoDataMessage) {
+    contentDiv.textContent = 'No Premium Learning content available currently for your profile.';
+  } else {
+    contentDiv.textContent = 'This block will load the Premium learning content for Premium users only.';
+  }
   blockElement.appendChild(contentDiv);
 }
 
@@ -77,8 +81,6 @@ export default async function decorate(block) {
     ...(products?.length > 0 && { products }),
   };
 
-  const placeholders = await fetchLanguagePlaceholders().catch(() => ({}));
-
   // Non-blocking eligibility check — shimmer stays visible until resolved.
   // TODO: Remove isSignedInUser call and move signedIn check to isPLEligible function once cyclic dependency is resolved.
   isSignedInUser()
@@ -86,8 +88,7 @@ export default async function decorate(block) {
     .then((isEligible) => {
       if (!isEligible) {
         buildCardsShimmer.removeShimmer();
-        if (UEAuthorMode) showFallbackContentInUEMode(block);
-        else block.remove();
+        handlePLBlockError(block, showFallbackContentInUEMode);
         return;
       }
 
@@ -127,26 +128,20 @@ export default async function decorate(block) {
               viewMoreAnchor.classList.toggle('hidden', sortedData.length <= DISPLAY_LIMIT);
             }
           } else {
-            const noResultsText =
-              placeholders.premiumLearningNoResults ||
-              'No Premium Learning content available currently for your profile.';
-            const noResultsDiv = htmlToElement(`<div class="browse-card-no-results">${noResultsText}</div>`);
-            block.appendChild(noResultsDiv);
+            handlePLBlockError(block, (b) => showFallbackContentInUEMode(b, true));
           }
         })
         .catch((err) => {
           buildCardsShimmer.removeShimmer();
-          if (UEAuthorMode) showFallbackContentInUEMode(block);
-          else block.remove();
           /* eslint-disable-next-line no-console */
           console.error('Error fetching PL browse card data:', err);
+          handlePLBlockError(block, showFallbackContentInUEMode);
         });
     })
     .catch((err) => {
       buildCardsShimmer.removeShimmer();
-      if (UEAuthorMode) showFallbackContentInUEMode(block);
-      else block.remove();
       /* eslint-disable-next-line no-console */
       console.error('Error resolving PL eligibility for browse cards:', err);
+      handlePLBlockError(block, showFallbackContentInUEMode);
     });
 }

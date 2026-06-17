@@ -176,3 +176,23 @@ export async function applyPLSectionGating(signedIn = null, timeoutMs = PL_ELIGI
   if (!isEligible) document.querySelectorAll('.premium-learning-section').forEach((s) => s.remove());
   return isEligible;
 }
+
+/**
+ * Handles Premium Learning block errors by showing fallback content in UE mode or removing on publish.
+ * @param {HTMLElement} block - The block element to handle
+ * @param {Function} [showFallbackFn] - Optional function to call in UE mode to show fallback content.
+ */
+export function handlePLBlockError(block, showFallbackFn = null) {
+  // In UE Author Mode, show fallback content if provided
+  if (isUEMode) {
+    showFallbackFn?.(block);
+    return;
+  }
+
+  const parentSection = block.closest('.section');
+  block.remove();
+  // Check if section is empty after removing block
+  if (parentSection && !parentSection.querySelector('.block')) {
+    parentSection.remove();
+  }
+}

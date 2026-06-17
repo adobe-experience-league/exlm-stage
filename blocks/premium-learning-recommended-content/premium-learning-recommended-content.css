@@ -6,7 +6,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--spectrum-spacing-300);
-  margin-top: 20px;
+}
+
+.premium-learning-recommended-content .premium-learning-recommended-content-title * {
+  margin-top: 0;
 }
 
 .premium-learning-recommended-content .premium-learning-recommended-content-description {
@@ -21,6 +24,7 @@
 
 .premium-learning-recommended-content .browse-cards-block-content {
   margin-top: var(--spectrum-spacing-500);
+  margin-bottom: 0;
 }
 
 @media (min-width: 600px) {
