@@ -10,12 +10,14 @@ import {
   getConfig,
   getLink,
   getPathDetails,
-  fetchGlobalFragment,
+  fetchWithFallback,
   fetchLanguagePlaceholders,
 } from '../../scripts/scripts.js';
 import getProducts from '../../scripts/utils/product-utils.js';
 import { isSignedInUser } from '../../scripts/auth/profile.js';
 import { isPLEligible } from '../../scripts/utils/premium-learning-utils.js';
+import { isDomainAllowed } from '../../scripts/utils/exlm-config-utils.js';
+import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
 import {
   decoratorState,
   isMobile,
@@ -29,7 +31,6 @@ import {
 import { decorateIcons, getMetadata } from '../../scripts/lib-franklin.js';
 import LanguageBlock from '../language/language.js';
 import ProfileMenu from './profile-menu.js';
-import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
 
 /**
  *  @typedef {Object} CommunityOptions
@@ -56,6 +57,15 @@ import isFeatureEnabled from '../../scripts/utils/feature-flag-utils.js';
  */
 
 const HEADER_CSS = `/blocks/header/exl-header.css`;
+
+/** fetch the header fragment relative to /${lang}/global-fragments/, ignoring any page metadata override */
+async function fetchHeaderFragment(fragmentPath, lang) {
+  const fragmentUrl = fragmentPath.replace('/en/', `/${lang}/`);
+  const path = `${window.hlx.codeBasePath}${fragmentUrl}.plain.html`;
+  const fallbackPath = `${window.hlx.codeBasePath}${fragmentPath}.plain.html`;
+  const response = await fetchWithFallback(path, fallbackPath);
+  return response.text();
+}
 
 let searchElementPromise = null;
 const { khorosProfileUrl, communityHost } = getConfig();
@@ -732,9 +742,8 @@ class ExlHeader extends HTMLElement {
   }
 
   async decorate() {
-    const headerMeta = 'header-fragment';
-    const fallback = '/en/global-fragments/header';
-    const headerFragment = await fetchGlobalFragment(headerMeta, fallback, this.decoratorOptions.lang);
+    const fragmentPath = '/en/global-fragments/header';
+    const headerFragment = await fetchHeaderFragment(fragmentPath, this.decoratorOptions.lang);
     if (headerFragment) {
       loadSearchElement();
 
@@ -811,16 +820,17 @@ class ExlHeader extends HTMLElement {
   }
 }
 
-customElements.define('exl-header', ExlHeader);
-
 /**
  * Create header web component and attach to the DOM
  * @param {HTMLHeadElement} headerBlock
  */
 export default async function decorate(headerBlock, options = {}) {
-  if (isFeatureEnabled('isHeaderV2')) {
+  if (isFeatureEnabled('isHeaderV2') || (await isDomainAllowed('headerv2allowedDomains'))) {
     const { default: decorateV2 } = await import('./header-v2.js');
     return decorateV2(headerBlock, options);
+  }
+  if (!customElements.get('exl-header')) {
+    customElements.define('exl-header', ExlHeader);
   }
   const exlHeader = new ExlHeader(options);
   headerBlock.replaceChildren(exlHeader);
