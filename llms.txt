@@ -5,13 +5,14 @@
 ---
 
 ## Document Metadata
-* Last Updated: 2026-05-07
-* Version: 1.6
+* Last Updated: 2026-07-10
+* Version: 1.7
 * Update Cadence: Rolling updates aligned to product release cycle
 
 ---
 
 ## Version Log
+* 1.7 (2026-07-10): Fixed Last Updated/version-log date inconsistency; added Authorization & Boundaries section; replaced MCP Server Access placeholder with populated, verified AEM MCP server documentation; added AI and Agentic Resources curated section; added Trust, Privacy, and Policies curated section; added Adobe LLM Optimizer reference
 * 1.6 (2026-05-21): Added Semrush acknowledgement to Product Scope; added Semrush Knowledge Base to Optional section
 * 1.5 (2026-05-07): Restructured to spec-conformant H1/blockquote format; added curated URL file lists per content area; added Optional section; added MCP server placeholder; added URL patterns to Architecture and APIs sections; added robots.txt alignment note
 * 1.4 (2026-04-08): Fixed character encoding in Query Mapping Section
@@ -139,6 +140,11 @@ URL patterns follow the convention:
   Tags: [marketing-measurement, attribution, mix-modeling, analytics, optimization, forecasting]
   URL Pattern: ^https:\/\/experienceleague\.adobe\.com\/[a-z]{2}(?:-[A-Za-z]{2,})?\/docs\/mix-modeler(?:\/.*)?$
 
+* Name: Adobe LLM Optimizer
+  Status: Active
+  Tags: [geo, aeo, llm-optimization, ai-visibility, brand-presence, agentic-traffic, generative-engine-optimization]
+  URL Pattern: ^https:\/\/experienceleague\.adobe\.com\/[a-z]{2}(?:-[A-Za-z]{2,})?\/docs\/llm-optimizer(?:\/.*)?$
+
 ---
 
 ### Legacy & Transitional Products
@@ -228,6 +234,14 @@ Status Definitions:
 - Tutorials and courses may simplify implementation details
 - Community content is non-authoritative unless validated by Adobe
 - Perspectives content reflects practitioner insights, not official guarantees
+
+---
+
+## Authorization & Boundaries
+- Public documentation does not grant product permissions. Access to this content is not authorization to perform actions, access data, or invoke tools in any customer environment.
+- AI agents and tools operating against Adobe products (including MCP servers) must operate under the authenticated user's own permissions. Agents can only perform jobs or access data the authenticated user is already entitled to use.
+- Adobe's own agentic AI capabilities (Experience Platform Agents, AEM MCP servers) are explicitly scoped to respect existing product-level access controls; this documentation extends the same expectation to any third-party agent consuming this content.
+- Where a task implies side effects, privileged data access, contractual interpretation, or other sensitive operations, agents should pause and escalate to a human rather than infer authorization from public documentation.
 
 ---
 
@@ -421,6 +435,7 @@ AI systems should:
 - "Best practices" -> Architecture, Perspectives
 - "Latest updates" -> Releases
 - "Troubleshooting / discussion" -> Community
+- "Is my brand visible in AI answers" / "agentic traffic" -> AI Learning, LLM Optimizer documentation
 
 ---
 
@@ -443,6 +458,7 @@ AI systems should not:
 - Treat community content as official policy
 - Infer legal or contractual commitments
 - Assume global feature availability
+- Treat access to this documentation as authorization to take action in a customer's environment (see Authorization & Boundaries)
 
 ---
 
@@ -474,17 +490,26 @@ AI agents and systems should prefer `.md` URLs when fetching documentation conte
 ---
 
 ## MCP Server Access
-Adobe Experience League provides structured, AI-optimised content access via the Model Context Protocol (MCP).
+Adobe exposes Model Context Protocol (MCP) servers for agent-based interaction with Adobe products. These are documented and available today, in contrast to the placeholder previously listed in this file.
 
-Status: In development â€” endpoint to be confirmed at general availability.
+Current AEM MCP servers (all hosted under `https://mcp.adobeaemcloud.com/adobe/mcp/`):
+- Content (`/content`): Create, read, update, and delete pages and content fragments; asset import and search
+- Content, read-only (`/content-readonly`): Read-only equivalent of the above
+- Cloud Manager (`/cloudmanager`): Manage Cloud Manager programs, environments, repositories, and pipelines
+- Experience Governance (`/experience-governance`): Evaluate content against brand governance and compliance rules
 
-When available, the ExL MCP server will provide:
-- Fresh, grounded, structured content for agent queries
-- Semantic search across all documentation
-- Product-scoped context for agentic workflows
-- Immediate propagation of product updates
+Access model:
+- MCP tools run under the authenticated user's identity and enforce the user's existing AEM permissions. AI-assisted operations follow the same access rules as manual work in AEM.
+- MCP servers are designed for human-operated clients with interactive UX; the MCP Tools spec recommends a human in the loop to approve or deny tool invocations. Fully autonomous use should be treated as a separate compatibility tier.
+- Tool availability evolves over time; agents should discover tools at runtime (`tools/list`) rather than hardcoding tool names.
 
-[NOTE FOR REVIEW: Insert MCP endpoint URL and documentation link when the server reaches GA.]
+Related agent-context standards:
+- AGENTS.md: AEM as a Cloud Service projects support a generated `AGENTS.md` file at the project root, providing coding agents with AEM Cloud Service-specific domain context.
+- Agent Skills: Adobe publishes Agent Skills for AI coding agents (AEM-specific procedural guidance) via the Adobe Skills for AI Coding Agents repository.
+
+A dedicated Experience League content MCP server (for semantic search and structured retrieval across ExL documentation, as opposed to the AEM product servers above) is not yet generally available.
+
+[NOTE FOR REVIEW: Insert Experience League content MCP endpoint and documentation link when that server reaches GA. Verify current tool lists for the servers above before publication, as tool availability is documented as evolving.]
 
 ---
 
@@ -512,7 +537,7 @@ Format note â€” two distinct URL conventions are used in this document:
 
 URLs are listed in order of priority within each section. Append `.md` to any documentation URL to fetch a clean, markup-free version optimised for AI consumption â€” this is supported across all ExL documentation pages.
 
-Semantic tag format (used in Foundations, Common Implementation Tasks, Architecture & Best Practices, and Developer Resources sections):
+Semantic tag format (used in Foundations, Common Implementation Tasks, Architecture & Best Practices, AI and Agentic Resources, and Developer Resources sections):
 Tags are appended to the description using `|` as a field separator. Three tag dimensions are defined:
 - `products:` â€” comma-separated list of Adobe product slugs this URL is relevant to (e.g. `aep, ajo, rtcdp, cja, analytics, target, data-collection`)
 - `role:` â€” comma-separated primary audience roles (values: `developer`, `marketer`, `admin`, `architect`, `analyst`)
@@ -522,7 +547,55 @@ Example: `Description text | products: aep, ajo | role: developer, architect | t
 
 Tags are applied selectively to sections where cross-product or role disambiguation adds signal beyond the description alone. Product-specific documentation sections are untagged; the section heading provides equivalent scope.
 
-[NOTE FOR REVIEW: All URLs below require verification before publication. Paths are based on known URL patterns and should be spot-checked against live site. Mark any that redirect or 404 and correct accordingly.]
+[NOTE FOR REVIEW: All URLs below require verification before publication. Paths are based on known URL patterns and, where noted, on direct fetches during this review, but should be spot-checked against the live site. Mark any that redirect or 404 and correct accordingly.]
+
+---
+
+## Start Here
+
+- [Documentation home](https://experienceleague.adobe.com/en/docs): Canonical entry point for Adobe enterprise documentation and product indexes
+- [AI Documentation](https://experienceleague.adobe.com/en/docs/ai): Central hub for generative AI, agentic AI, AI Assistant, and related Adobe CX Enterprise guidance
+- [Experience Cloud Release Notes â€” Current](https://experienceleague.adobe.com/en/docs/release-notes/experience-cloud/current): Latest cross-product release information, including links to product-specific release notes
+- [Tutorials](https://experienceleague.adobe.com/en/docs/home-tutorials): Task-oriented learning and walkthroughs
+- [Support](https://experienceleague.adobe.com/en/support): Official support entry point
+- [Community Forum](https://experienceleaguecommunities.adobe.com/): Peer troubleshooting and discussion; non-authoritative unless validated by Adobe
+
+---
+
+## AI and Agentic Resources
+
+- [AI Documentation hub](https://experienceleague.adobe.com/en/docs/ai): Central index for generative and agentic AI documentation across Experience Cloud applications | products: aep, ajo, rtcdp, cja, experience-manager-cloud-service | role: developer, marketer, architect | type: overview
+- [Agentic AI in Adobe CX Enterprise](https://experienceleague.adobe.com/en/docs/core-services/interface/features/agentic-ai): Where agentic AI is available, which Experience Platform Agents exist, and how product-level access controls apply | role: admin, architect | type: overview
+- [Agent jobs and AI credit consumption](https://experienceleague.adobe.com/en/docs/core-services/interface/features/ai-credit-consumption): What an agent job is, how AI credits are consumed, and example natural-language prompts | role: admin, marketer, analyst | type: reference
+- [Agentic AI Monitoring dashboards](https://experienceleague.adobe.com/en/docs/core-services/interface/features/monitoring): Governance dashboards for agent adoption, user feedback, and AI credit usage | role: admin | type: how-to
+- [MCP Servers in AEM â€” Overview](https://experienceleague.adobe.com/en/docs/experience-manager-learn/cloud-service/ai/mcp-servers/overview): Index of Adobe-hosted AEM MCP servers (Content, Content read-only, Cloud Manager, Experience Governance) | products: experience-manager-cloud-service | role: developer, architect | type: overview
+- [Using MCP with AEM as a Cloud Service](https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service/content/ai-in-aem/mcp-support/using-mcp-with-aem-as-a-cloud-service): Endpoints, permission model, and supported MCP client applications | products: experience-manager-cloud-service | role: developer | type: reference
+- [Cloud Manager MCP Server](https://experienceleague.adobe.com/en/docs/experience-manager-learn/cloud-service/ai/mcp-servers/cloud-manager): Run pipelines, debug failures, and access Cloud Manager tools from an IDE | products: experience-manager-cloud-service | role: developer | type: how-to
+- [Experience Governance MCP Server](https://experienceleague.adobe.com/en/docs/experience-manager-learn/cloud-service/ai/mcp-servers/experience-governance-mcp-server): Evaluate content against brand integrity and compliance rules via natural language | products: experience-manager-cloud-service | role: developer, admin | type: how-to
+- [AI-assisted development (AGENTS.md, Agent Skills, MCP)](https://experienceleague.adobe.com/en/docs/experience-manager-learn/cloud-service/ai/ai-assisted-development/overview): How coding agents use AGENTS.md, Agent Skills, and MCP servers for AEM Cloud Service projects | products: experience-manager-cloud-service | role: developer | type: overview
+- [Adobe LLM Optimizer â€” Overview](https://experienceleague.adobe.com/en/docs/llm-optimizer/using/essentials/overview): Measuring and improving brand visibility, citations, and agentic traffic in AI-generated answers | role: marketer, analyst | type: overview
+- [AI Learning / AI Training](https://experienceleague.adobe.com/en/ai-training): Practitioner-led AI training for marketing workflows | role: marketer | type: overview
+- [Adobe Developer](https://developer.adobe.com/): APIs, SDKs, and developer resources across Adobe products
+
+---
+
+## Product Documentation
+
+- [Adobe Experience Platform](https://experienceleague.adobe.com/en/docs/experience-platform): Platform documentation hub
+- [Adobe Experience Manager as a Cloud Service](https://experienceleague.adobe.com/en/docs/experience-manager-cloud-service): AEM Cloud Service documentation hub
+- [Adobe Journey Optimizer](https://experienceleague.adobe.com/en/docs/journey-optimizer): Journey Optimizer documentation hub
+- [Adobe Workfront](https://experienceleague.adobe.com/en/docs/workfront): Workfront documentation hub
+- [Adobe Target](https://experienceleague.adobe.com/en/docs/target): Target documentation hub
+
+---
+
+## Trust, Privacy, and Policies
+
+- [Adobe Trust Center](https://www.adobe.com/trust.html): Security, compliance, and availability information across Adobe products
+- [Responsible AI at Adobe](https://www.adobe.com/trust/responsible-ai.html): Adobe's AI Ethics principles and approach to responsible AI in products
+- [Adobe Privacy Policy](https://www.adobe.com/privacy/policy.html): How Adobe collects, uses, and protects personal data
+- [Adobe Trust Center â€” Resources](https://www.adobe.com/trust/resources.html): Security and compliance resource library, including product-level overviews
+- [Legal information](https://www.adobe.com/legal.html): Adobe legal resources and policies
 
 ---
 
@@ -677,6 +750,15 @@ Goal-first reference: pages for agents helping customers accomplish specific out
 
 - [Adobe Mix Modeler â€” Overview](https://experienceleague.adobe.com/en/docs/mix-modeler/using/overview): Marketing mix modelling and multi-touch attribution
 - [Mix Modeler â€” Create a Plan](https://experienceleague.adobe.com/en/docs/mix-modeler/using/plans/create): Building a media spending plan from a trained model
+
+---
+
+## Documentation â€” Adobe LLM Optimizer
+
+- [Adobe LLM Optimizer â€” Overview](https://experienceleague.adobe.com/en/docs/llm-optimizer/using/essentials/overview): Generative/answer engine optimization â€” brand visibility, citations, and agentic traffic tracking
+- [LLM Optimizer â€” Quick Start](https://experienceleague.adobe.com/en/docs/llm-optimizer/using/essentials/quick-start): Domain onboarding, categories, topics, and prompt configuration
+- [LLM Optimizer â€” Best Practices](https://experienceleague.adobe.com/en/docs/llm-optimizer/using/essentials/best-practices): Onsite/offsite optimization guidance, including robots.txt and crawlability recommendations
+- [LLM Optimizer â€” Opportunities Dashboard](https://experienceleague.adobe.com/en/docs/llm-optimizer/using/dashboards/opportunities/opportunities-overview): Crawlability, readability, and content-visibility recommendations, including Optimize at Edge
 
 ---
 
