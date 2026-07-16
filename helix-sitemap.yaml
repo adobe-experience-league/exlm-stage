@@ -1,6 +1,6 @@
 sitemaps:
   example:
-    origin: https://experienceleague-dev.adobe.com
+    origin: https://experienceleague-stage.adobe.com
     default: en
     lastmod: YYYY-MM-DD
     languages:
@@ -56,7 +56,7 @@ sitemaps:
         alternate: /zh-hant/{path}
 
   sitemap-1:
-    origin: https://experienceleague-dev.adobe.com
+    origin: https://experienceleague-stage.adobe.com
     default: en
     lastmod: YYYY-MM-DD
     languages:
@@ -112,7 +112,7 @@ sitemaps:
         alternate: /zh-hant/{path}
 
   sitemap-2:
-    origin: https://experienceleague-dev.adobe.com
+    origin: https://experienceleague-stage.adobe.com
     default: en
     lastmod: YYYY-MM-DD
     languages:
