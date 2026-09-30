@@ -276,6 +276,21 @@ body[class^='browse-'] .browse-card.event-upcoming-event-card .browse-card-figur
     justify-content: center;
   }
 
+  /*
+   * Fallback file is 572×396. Stretch the figure with the row so the column matches
+   * the other list thumbs and the badge stays at the top. Contain keeps the file
+   * ratio inside that column. The date stays in the right column.
+   */
+  :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
+    .browse-card.upcoming-event-card
+    .browse-card-figure.has-fallback-image,
+  :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
+    .browse-card.event-upcoming-event-card
+    .browse-card-figure.has-fallback-image {
+    aspect-ratio: 572 / 396;
+    height: auto;
+  }
+
   :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
     .browse-card.upcoming-event-card
     .browse-card-figure
@@ -331,6 +346,17 @@ body[class^='browse-'] .browse-card.event-upcoming-event-card .browse-card-figur
     letter-spacing: 0;
     color: var(--spectrum-gray-50);
     opacity: 1;
+  }
+
+  :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
+    .browse-card.upcoming-event-card
+    .browse-card-figure.has-fallback-image
+    .card-figure-date,
+  :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
+    .browse-card.event-upcoming-event-card
+    .browse-card-figure.has-fallback-image
+    .card-figure-date {
+    display: none;
   }
 
   :is(.upcoming-event-v2.list, .events-search .events-search-results-body.list)
